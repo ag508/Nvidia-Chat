@@ -43,7 +43,17 @@ npm install
 npm run dev
 ```
 
-The app will be available at **[http://localhost:3000](http://localhost:3000)**.
+The app will be available at **[http://localhost:3000](http://localhost:3000)** in development. For Docker Compose, the default host port is **3001** and can be changed with `HOST_PORT`.
+
+
+### Docker Compose
+
+```bash
+# Build and run on a configurable host port (defaults to 3001)
+HOST_PORT=3001 docker compose up --build
+```
+
+This keeps the container listening on port `3000` internally while mapping a host port of your choice, so you are no longer locked to `8090`. Persistent SQLite data is stored in the local `./data` directory mounted into the container.
 
 ### First-Time Setup
 

@@ -1,47 +1,98 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useCallback } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { vscDarkPlus } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  Plus, Send, Settings, Trash2, MessageSquare, ChevronDown, Loader2,
-  Menu, X, Cpu, Brain, Paperclip, Copy, Check, FileText, Image as ImageIcon,
-  Globe, Search
+  ArrowRight,
+  Brain,
+  Check,
+  ChevronDown,
+  Command,
+  Compass,
+  Copy,
+  Cpu,
+  FileText,
+  Globe,
+  Image as ImageIcon,
+  Loader2,
+  Menu,
+  MessageSquare,
+  Paperclip,
+  Plus,
+  Search,
+  Send,
+  Settings,
+  Sparkles,
+  TerminalSquare,
+  Trash2,
+  Wand2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { Model, Conversation, Message, MessageAttachment } from "@/lib/types";
+import { Conversation, Message, MessageAttachment, Model } from "@/lib/types";
 
-/* ─── Code Block ─── */
-function CodeBlock({ node, inline, className, children, ...props }: any) {
+function CodeBlock({ inline, className, children, ...props }: any) {
   const lang = /language-(\w+)/.exec(className || "")?.[1];
   const [copied, setCopied] = useState(false);
   const code = String(children).replace(/\n$/, "");
 
   if (!inline && lang) {
     return (
-      <div className="my-3 rounded-lg overflow-hidden border border-[#2a2a2a] bg-[#1e1e1e]">
-        <div className="flex items-center justify-between px-3 py-1.5 bg-[#181818] border-b border-[#2a2a2a]">
-          <span className="text-[11px] font-mono text-[#888] uppercase tracking-wider">{lang}</span>
-          <button onClick={() => { navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 2000); }}
-            className="flex items-center gap-1 text-[11px] text-[#666] hover:text-[#aaa] transition-colors">
-            {copied ? <Check size={12} className="text-nvidia-green" /> : <Copy size={12} />}
+      <div className="my-4 overflow-hidden rounded-2xl border border-white/10 bg-[#0a1115] shadow-[0_20px_60px_rgba(0,0,0,0.35)]">
+        <div className="flex items-center justify-between border-b border-white/10 bg-black/30 px-4 py-2.5">
+          <div className="flex items-center gap-2 text-[11px] font-medium uppercase tracking-[0.28em] text-white/45">
+            <span className="h-2 w-2 rounded-full bg-[#76b900]" />
+            {lang}
+          </div>
+          <button
+            onClick={() => {
+              navigator.clipboard.writeText(code);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1800);
+            }}
+            className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/55 transition hover:border-[#76b900]/40 hover:text-white"
+          >
+            {copied ? <Check size={12} className="text-[#76b900]" /> : <Copy size={12} />}
             {copied ? "Copied" : "Copy"}
           </button>
         </div>
-        <SyntaxHighlighter style={vscDarkPlus} language={lang} PreTag="div"
-          customStyle={{ margin: 0, padding: "0.75rem 1rem", background: "transparent", fontSize: "12.5px", lineHeight: "1.6" }}
-          {...props}>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={lang}
+          PreTag="div"
+          customStyle={{
+            margin: 0,
+            padding: "1rem 1.1rem",
+            background: "transparent",
+            fontSize: "12.5px",
+            lineHeight: "1.7",
+          }}
+          {...props}
+        >
           {code}
         </SyntaxHighlighter>
       </div>
     );
   }
-  return <code className={className} {...props}>{children}</code>;
+
+  return (
+    <code className={cn("rounded-md border border-[#76b900]/15 bg-[#76b900]/10 px-1.5 py-0.5 font-mono text-[0.85em] text-[#b5f35c]", className)} {...props}>
+      {children}
+    </code>
+  );
 }
 
-/* ─── Main Page ─── */
+const promptIdeas = [
+  "Design a launch plan for a GPU inference API with pricing tiers.",
+  "Explain a CUDA kernel optimization strategy like a terminal log.",
+  "Compare Claude, GPT, and local models for a support assistant.",
+  "Summarize the latest architecture decisions in this project.",
+];
+
 export default function ChatPage() {
   const [models, setModels] = useState<Model[]>([]);
   const [conversations, setConversations] = useState<Conversation[]>([]);
@@ -64,96 +115,132 @@ export default function ChatPage() {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const modelPickerRef = useRef<HTMLDivElement>(null);
+  const animationFrameRef = useRef<number | null>(null);
+  const pendingContentRef = useRef("");
+  const pendingReasoningRef = useRef("");
 
-  /* ─ data fetching ─ */
-  useEffect(() => { fetchModels(); fetchConversations(); }, []);
-
-  /* ─ detect mobile ─ */
   useEffect(() => {
-    const mq = window.matchMedia("(max-width: 768px)");
+    fetchModels();
+    fetchConversations();
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 1024px)");
     setIsMobile(mq.matches);
-    setSidebarOpen(!mq.matches); // open by default on desktop
-    const handler = (e: MediaQueryListEvent) => {
-      setIsMobile(e.matches);
-      if (e.matches) setSidebarOpen(false);
-      else setSidebarOpen(true);
+    setSidebarOpen(!mq.matches);
+
+    const handler = (event: MediaQueryListEvent) => {
+      setIsMobile(event.matches);
+      setSidebarOpen(!event.matches);
     };
+
     mq.addEventListener("change", handler);
     return () => mq.removeEventListener("change", handler);
   }, []);
 
   useEffect(() => {
-    function onClick(e: MouseEvent) {
-      if (modelPickerRef.current && !modelPickerRef.current.contains(e.target as Node)) setShowModelPicker(false);
-    }
-    document.addEventListener("mousedown", onClick);
-    return () => document.removeEventListener("mousedown", onClick);
+    const handleOutside = (event: MouseEvent) => {
+      if (modelPickerRef.current && !modelPickerRef.current.contains(event.target as Node)) {
+        setShowModelPicker(false);
+      }
+    };
+
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
   }, []);
 
-  /* smooth scroll — only scroll the last 80px into view to avoid jarring jump */
-  const scrollToBottom = useCallback(() => {
+  const scrollToBottom = useCallback((force = false) => {
     if (!scrollRef.current) return;
     const el = scrollRef.current;
-    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 300;
-    if (isNearBottom) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    const isNearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < 220;
+    if (force || isNearBottom) {
+      el.scrollTo({ top: el.scrollHeight, behavior: force ? "auto" : "smooth" });
     }
   }, []);
 
-  useEffect(() => { scrollToBottom(); }, [messages, streamContent, streamReasoning, scrollToBottom]);
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages, streamContent, streamReasoning, scrollToBottom]);
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = "auto";
-      textareaRef.current.style.height = Math.min(textareaRef.current.scrollHeight, 160) + "px";
-    }
+    if (!textareaRef.current) return;
+    textareaRef.current.style.height = "auto";
+    textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 220)}px`;
   }, [input]);
 
+  useEffect(() => {
+    return () => {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+    };
+  }, []);
+
+  const selectedModel = models.find((model) => model.id === selectedModelId);
+  const activeConversationTitle = conversations.find((item) => item.id === activeConversation)?.title;
+  const sourceCount = useMemo(
+    () => messages.reduce((acc, message) => acc + (message.attachments?.filter((attachment) => attachment.type === "source").length || 0), 0),
+    [messages]
+  );
+
+  const scheduleStreamFlush = useCallback(() => {
+    if (animationFrameRef.current) return;
+    animationFrameRef.current = requestAnimationFrame(() => {
+      animationFrameRef.current = null;
+      setStreamContent(pendingContentRef.current);
+      setStreamReasoning(pendingReasoningRef.current);
+    });
+  }, []);
+
   async function fetchModels() {
-    const data = await fetch("/api/models").then(r => r.json());
+    const data = await fetch("/api/models").then((response) => response.json());
     setModels(data);
-    const def = data.find((m: Model) => m.isDefault) || data[0];
-    if (def) setSelectedModelId(def.id);
+    const defaultModel = data.find((model: Model) => model.isDefault) || data[0];
+    if (defaultModel) setSelectedModelId(defaultModel.id);
   }
 
   async function fetchConversations() {
-    setConversations(await fetch("/api/conversations").then(r => r.json()));
+    setConversations(await fetch("/api/conversations").then((response) => response.json()));
   }
 
   async function loadMessages(id: string) {
-    setMessages(await fetch(`/api/messages?conversationId=${id}`).then(r => r.json()));
+    setMessages(await fetch(`/api/messages?conversationId=${id}`).then((response) => response.json()));
     setActiveConversation(id);
-    if (isMobile) setSidebarOpen(false); // auto-close sidebar on mobile
+    scrollToBottom(true);
+    if (isMobile) setSidebarOpen(false);
   }
 
   async function createConversation() {
-    const conv = await fetch("/api/conversations", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+    const conversation = await fetch("/api/conversations", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modelId: selectedModelId }),
-    }).then(r => r.json());
-    setConversations(p => [conv, ...p]);
-    setActiveConversation(conv.id);
+    }).then((response) => response.json());
+
+    setConversations((prev) => [conversation, ...prev]);
+    setActiveConversation(conversation.id);
     setMessages([]);
-    return conv.id;
+    return conversation.id;
   }
 
   async function deleteConversation(id: string) {
     await fetch(`/api/conversations?id=${id}`, { method: "DELETE" });
-    setConversations(p => p.filter(c => c.id !== id));
-    if (activeConversation === id) { setActiveConversation(null); setMessages([]); }
+    setConversations((prev) => prev.filter((conversation) => conversation.id !== id));
+    if (activeConversation === id) {
+      setActiveConversation(null);
+      setMessages([]);
+    }
   }
 
-  /* file attach */
-  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
-    if (e.target.files) setAttachments(prev => [...prev, ...Array.from(e.target.files!)]);
-    e.target.value = "";
+  function handleFileSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    if (event.target.files) {
+      setAttachments((prev) => [...prev, ...Array.from(event.target.files || [])]);
+    }
+    event.target.value = "";
   }
 
-  function removeAttachment(i: number) {
-    setAttachments(prev => prev.filter((_, idx) => idx !== i));
+  function removeAttachment(index: number) {
+    setAttachments((prev) => prev.filter((_, idx) => idx !== index));
   }
 
-  /* ─ helpers ─ */
   function fileToBase64(file: File): Promise<string> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
@@ -163,485 +250,832 @@ export default function ChatPage() {
     });
   }
 
-  /* send */
   const sendMessage = useCallback(async () => {
     if ((!input.trim() && !attachments.length) || isStreaming) return;
 
     const textContent = input.trim();
     const currentAttachments = [...attachments];
 
-    // Display text for the message content
     let displayContent = textContent;
     if (currentAttachments.length) {
-      const names = currentAttachments.map(f => f.name).join(", ");
+      const names = currentAttachments.map((file) => file.name).join(", ");
       displayContent = textContent ? `[Attached: ${names}]\n\n${textContent}` : `[Attached: ${names}]`;
     }
+
     setInput("");
     setAttachments([]);
 
-    let convId = activeConversation || await createConversation();
+    const conversationId = activeConversation || (await createConversation());
 
-    // Convert image attachments to base64 for storage & display
-    const imageFiles = currentAttachments.filter(f => f.type.startsWith("image/"));
+    const imageFiles = currentAttachments.filter((file) => file.type.startsWith("image/"));
     let savedAttachments: MessageAttachment[] | undefined;
+
     if (imageFiles.length > 0) {
       savedAttachments = [];
-      for (const imgFile of imageFiles) {
-        const dataUri = await fileToBase64(imgFile);
-        savedAttachments.push({ name: imgFile.name, type: imgFile.type, data: dataUri });
+      for (const imageFile of imageFiles) {
+        const dataUri = await fileToBase64(imageFile);
+        savedAttachments.push({ name: imageFile.name, type: imageFile.type, data: dataUri });
       }
     }
 
-    // Save user message to DB (with attachment data)
-    const userMsg = await fetch("/api/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: convId, role: "user", content: displayContent, attachments: savedAttachments }),
-    }).then(r => r.json());
+    const userMessage = await fetch("/api/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId,
+        role: "user",
+        content: displayContent,
+        attachments: savedAttachments,
+      }),
+    }).then((response) => response.json());
 
-    setMessages(p => [...p, userMsg]);
+    setMessages((prev) => [...prev, userMessage]);
     fetchConversations();
     setIsStreaming(true);
+    pendingContentRef.current = "";
+    pendingReasoningRef.current = "";
     setStreamContent("");
     setStreamReasoning("");
 
-    // Build the multimodal content for the API
     let apiContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = textContent;
-
-    const imageAttachments = currentAttachments.filter(f => f.type.startsWith("image/"));
-    const nonImageAttachments = currentAttachments.filter(f => !f.type.startsWith("image/"));
+    const imageAttachments = currentAttachments.filter((file) => file.type.startsWith("image/"));
+    const nonImageAttachments = currentAttachments.filter((file) => !file.type.startsWith("image/"));
 
     if (imageAttachments.length > 0) {
-      // Build multimodal content array for vision-capable models
       const contentParts: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
-
-      // Add text part
       let fullText = textContent;
+
       if (nonImageAttachments.length) {
-        const names = nonImageAttachments.map(f => f.name).join(", ");
+        const names = nonImageAttachments.map((file) => file.name).join(", ");
         fullText = fullText ? `[Attached files: ${names}]\n\n${fullText}` : `[Attached files: ${names}]`;
       }
-      if (fullText) {
-        contentParts.push({ type: "text", text: fullText });
-      }
 
-      // Convert each image to base64 and add as image_url parts
-      for (const imgFile of imageAttachments) {
-        const dataUri = await fileToBase64(imgFile);
-        contentParts.push({
-          type: "image_url",
-          image_url: { url: dataUri },
-        });
+      if (fullText) contentParts.push({ type: "text", text: fullText });
+
+      for (const imageFile of imageAttachments) {
+        const dataUri = await fileToBase64(imageFile);
+        contentParts.push({ type: "image_url", image_url: { url: dataUri } });
       }
 
       apiContent = contentParts;
     } else if (nonImageAttachments.length) {
-      const names = nonImageAttachments.map(f => f.name).join(", ");
+      const names = nonImageAttachments.map((file) => file.name).join(", ");
       apiContent = textContent ? `[Attached files: ${names}]\n\n${textContent}` : `[Attached files: ${names}]`;
     }
 
-    // Build message history for the API (previous messages as text, current with images)
-    const chatMsgs: Array<{ role: string; content: any }> = [
-      ...messages.map(m => ({ role: m.role, content: m.content })),
+    const chatMessages: Array<{ role: string; content: any }> = [
+      ...messages.map((message) => ({ role: message.role, content: message.content })),
     ];
 
-    // Web search: if enabled, search first and inject results as system context
     let sources: Array<{ title: string; url: string }> = [];
+
     if (searchEnabled && textContent) {
       setIsSearching(true);
       try {
-        const searchRes = await fetch("/api/search", {
+        const searchResponse = await fetch("/api/search", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ query: textContent, maxResults: 5 }),
         });
-        if (searchRes.ok) {
-          const { results } = await searchRes.json();
-          if (results && results.length > 0) {
-            sources = results.map((r: any) => ({ title: r.title, url: r.url }));
-            setSearchSources(sources);
 
-            // Build search context
+        if (searchResponse.ok) {
+          const { results } = await searchResponse.json();
+          if (results?.length) {
+            sources = results.map((result: any) => ({ title: result.title, url: result.url }));
+            setSearchSources(sources);
             const searchContext = results
-              .map((r: any, i: number) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`)
+              .map((result: any, index: number) => `[${index + 1}] ${result.title}\nURL: ${result.url}\n${result.snippet}`)
               .join("\n\n");
 
-            chatMsgs.unshift({
+            chatMessages.unshift({
               role: "system",
-              content: `You have access to the following real-time web search results for the user's query. Use this information to provide accurate, up-to-date answers. Cite sources using [1], [2], etc. when referencing specific results.\n\n---\nSEARCH RESULTS:\n${searchContext}\n---`,
+              content:
+                "You have access to the following real-time web search results for the user's query. Use this information to provide accurate, up-to-date answers. Cite sources using [1], [2], etc. when referencing specific results.\n\n---\nSEARCH RESULTS:\n" +
+                searchContext +
+                "\n---",
             });
           }
         }
-      } catch (e) {
-        console.error("Search failed:", e);
+      } catch (error) {
+        console.error("Search failed:", error);
       } finally {
         setIsSearching(false);
       }
     }
 
-    // Add the current user message
-    chatMsgs.push({ role: "user", content: apiContent });
+    chatMessages.push({ role: "user", content: apiContent });
 
     try {
-      const res = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatMsgs, modelId: selectedModelId, conversationId: convId }),
+      const response = await fetch("/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: chatMessages, modelId: selectedModelId, conversationId }),
       });
-      if (!res.ok) throw new Error((await res.json()).error || "Request failed");
 
-      const reader = res.body?.getReader();
+      if (!response.ok) {
+        throw new Error((await response.json()).error || "Request failed");
+      }
+
+      const reader = response.body?.getReader();
       const decoder = new TextDecoder();
-      let full = "", reasoning = "";
+      let full = "";
+      let reasoning = "";
 
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          for (const line of decoder.decode(value).split("\n").filter(l => l.startsWith("data: "))) {
-            const d = line.slice(6);
-            if (d === "[DONE]") continue;
+
+          for (const line of decoder.decode(value).split("\n").filter((item) => item.startsWith("data: "))) {
+            const data = line.slice(6);
+            if (data === "[DONE]") continue;
+
             try {
-              const p = JSON.parse(d);
-              if (p.type === "error") throw new Error(p.content);
-              if (p.type === "reasoning") { reasoning += p.content; setStreamReasoning(reasoning); }
-              if (p.type === "content") { full += p.content; setStreamContent(full); }
-            } catch {}
+              const payload = JSON.parse(data);
+              if (payload.type === "error") throw new Error(payload.content);
+              if (payload.type === "reasoning") {
+                reasoning += payload.content;
+                pendingReasoningRef.current = reasoning;
+                scheduleStreamFlush();
+              }
+              if (payload.type === "content") {
+                full += payload.content;
+                pendingContentRef.current = full;
+                scheduleStreamFlush();
+              }
+            } catch {
+              continue;
+            }
           }
         }
       }
 
-      // Save sources as attachments on the assistant message
-      const sourceAttachments = sources.length > 0
-        ? sources.map((s, i) => ({ name: s.title, type: "source", data: s.url }))
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+        animationFrameRef.current = null;
+      }
+      setStreamContent(full);
+      setStreamReasoning(reasoning);
+
+      const sourceAttachments = sources.length
+        ? sources.map((source) => ({ name: source.title, type: "source", data: source.url }))
         : undefined;
 
-      const am = await fetch("/api/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ conversationId: convId, role: "assistant", content: full, reasoning: reasoning || undefined, attachments: sourceAttachments }),
-      }).then(r => r.json());
-      setMessages(p => [...p, am]);
-    } catch (err: any) {
-      setMessages(p => [...p, { id: "err-" + Date.now(), conversationId: convId, role: "system", content: `Error: ${err.message}`, createdAt: new Date().toISOString() }]);
+      const assistantMessage = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          conversationId,
+          role: "assistant",
+          content: full,
+          reasoning: reasoning || undefined,
+          attachments: sourceAttachments,
+        }),
+      }).then((response) => response.json());
+
+      setMessages((prev) => [...prev, assistantMessage]);
+    } catch (error: any) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `err-${Date.now()}`,
+          conversationId,
+          role: "system",
+          content: `Error: ${error.message}`,
+          createdAt: new Date().toISOString(),
+        },
+      ]);
     } finally {
       setIsStreaming(false);
+      pendingContentRef.current = "";
+      pendingReasoningRef.current = "";
       setStreamContent("");
       setStreamReasoning("");
       setSearchSources([]);
     }
-  }, [input, isStreaming, activeConversation, messages, selectedModelId, attachments, searchEnabled]);
-
-  const selectedModel = models.find(m => m.id === selectedModelId);
+  }, [activeConversation, attachments, createConversation, input, isStreaming, messages, scheduleStreamFlush, searchEnabled, selectedModelId]);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-bg text-[#d4d4d4] text-[13px]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(118,185,0,0.16),_transparent_24%),linear-gradient(180deg,#071015_0%,#05080b_45%,#040506_100%)] text-white">
+      <div className="pointer-events-none fixed inset-0 opacity-60">
+        <div className="terminal-grid absolute inset-0" />
+        <div className="absolute inset-x-0 top-0 h-48 bg-[radial-gradient(circle_at_top,_rgba(118,185,0,0.18),_transparent_55%)]" />
+      </div>
 
-      {/* ── Mobile backdrop ── */}
-      {isMobile && sidebarOpen && (
-        <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />
-      )}
+      {isMobile && sidebarOpen && <div className="sidebar-backdrop" onClick={() => setSidebarOpen(false)} />}
 
-      {/* ── Sidebar ── */}
-      <aside className={cn(
-        "h-full flex-shrink-0 bg-surface border-r border-[#222] flex flex-col transition-all duration-200 overflow-hidden",
-        isMobile ? (sidebarOpen ? "mobile-sidebar" : "mobile-sidebar-closed") : (sidebarOpen ? "w-[240px]" : "w-0"),
-        "z-40"
-      )}>
-        <div className="flex flex-col h-full min-w-[240px]">
-          {/* head */}
-          <div className="flex items-center justify-between px-3 py-3 border-b border-[#222]">
-            <div className="flex items-center gap-2">
-              <div className="w-6 h-6 rounded bg-nvidia-green flex items-center justify-center">
-                <span className="text-black font-bold text-[10px] font-mono">N</span>
-              </div>
-              <span className="font-semibold text-[13px] text-white">nvidia-chat</span>
-            </div>
-            <button onClick={() => setSidebarOpen(false)} className="p-1 hover:bg-[#222] rounded text-[#666] hover:text-white transition-colors">
-              <X size={14} />
-            </button>
-          </div>
-
-          {/* new chat */}
-          <div className="px-2 py-2">
-            <button onClick={() => { setActiveConversation(null); setMessages([]); if (isMobile) setSidebarOpen(false); }}
-              className="sidebar-btn w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] font-medium text-[#aaa] hover:text-white hover:bg-[#222] border border-[#222] hover:border-[#333] transition-all">
-              <Plus size={14} /> New chat
-            </button>
-          </div>
-
-          {/* list */}
-          <div className="flex-1 overflow-y-auto px-2 pb-2">
-            <p className="text-[10px] font-mono uppercase tracking-widest text-[#555] px-2 py-2">history</p>
-            {conversations.map(c => (
-              <div key={c.id} onClick={() => loadMessages(c.id)}
-                className={cn("group flex items-center gap-2 px-2.5 py-2 rounded-md cursor-pointer transition-colors text-[12px] mb-0.5",
-                  activeConversation === c.id ? "bg-nvidia-green/10 text-nvidia-green" : "text-[#888] hover:text-white hover:bg-[#1a1a1a]"
-                )}>
-                <MessageSquare size={13} className="flex-shrink-0" />
-                <span className="truncate flex-1">{c.title}</span>
-                <button onClick={e => { e.stopPropagation(); deleteConversation(c.id); }}
-                  className="opacity-0 group-hover:opacity-100 p-0.5 text-red-500 hover:text-red-400 transition-all">
-                  <Trash2 size={12} />
-                </button>
-              </div>
-            ))}
-            {!conversations.length && <p className="text-[11px] text-[#444] text-center py-6">No chats yet</p>}
-          </div>
-
-          {/* bottom */}
-          <div className="px-2 py-2 border-t border-[#222]">
-            <a href="/settings" className="flex items-center gap-2 px-2.5 py-2 rounded-md text-[12px] text-[#888] hover:text-white hover:bg-[#1a1a1a] transition-colors">
-              <Settings size={14} /> Settings
-            </a>
-          </div>
-        </div>
-      </aside>
-
-      {/* ── Main Area ── */}
-      <main className="flex-1 flex flex-col min-w-0 relative">
-
-        {/* top bar — just the sidebar toggle when collapsed */}
-        {!sidebarOpen && (
-          <div className="absolute top-2 left-2 z-50">
-            <button onClick={() => setSidebarOpen(true)} className="p-2 bg-surface hover:bg-surface-2 border border-[#222] rounded-md transition-colors text-[#888] hover:text-white">
-              <Menu size={16} />
-            </button>
-          </div>
-        )}
-
-        {/* message area */}
-        <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 md:px-4 px-2">
-          {!messages.length && !isStreaming ? (
-            <div className="flex items-center justify-center h-full">
-              <div className="text-center max-w-md">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-2 border border-[#222] text-[11px] font-mono text-nvidia-green mb-6">
-                  <span className="w-1.5 h-1.5 bg-nvidia-green rounded-full animate-pulse" />
-                  {selectedModel?.name || "no model"} online
-                </div>
-                <h1 className="text-2xl font-semibold text-white mb-2">nvidia-chat</h1>
-                <p className="text-[#666] text-[13px] leading-relaxed">
-                  Connected to <span className="text-nvidia-green font-mono text-[12px]">{selectedModel?.provider || "—"}</span> endpoint.<br/>
-                  Type a message below to begin.
-                </p>
-              </div>
-            </div>
-          ) : (
-            <div className="max-w-3xl mx-auto py-6 space-y-1">
-              {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} />
-              ))}
-
-              {/* searching indicator */}
-              {isSearching && (
-                <div className="py-4">
-                  <div className="pl-8 flex items-center gap-2 text-[#666] text-[12px]">
-                    <Globe size={13} className="animate-spin text-nvidia-green" /> Searching the web...
+      <div className="relative flex h-screen overflow-hidden">
+        <AnimatePresence>
+          {sidebarOpen && (
+            <motion.aside
+              initial={isMobile ? { x: -320, opacity: 0 } : { opacity: 0 }}
+              animate={isMobile ? { x: 0, opacity: 1 } : { opacity: 1 }}
+              exit={isMobile ? { x: -320, opacity: 0 } : { opacity: 0 }}
+              transition={{ duration: 0.24, ease: [0.22, 1, 0.36, 1] }}
+              className={cn(
+                "z-40 flex h-full w-[320px] shrink-0 flex-col border-r border-white/10 bg-black/45 backdrop-blur-2xl",
+                isMobile && "mobile-sidebar fixed left-0 top-0 bottom-0"
+              )}
+            >
+              <div className="flex items-center justify-between border-b border-white/10 px-5 py-5">
+                <div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-[#76b900]/40 bg-[#76b900]/15 shadow-[0_0_30px_rgba(118,185,0,0.18)]">
+                      <TerminalSquare size={19} className="text-[#9ae61a]" />
+                    </div>
+                    <div>
+                      <p className="text-[11px] font-medium uppercase tracking-[0.32em] text-[#9ae61a]">NVIDIA CHAT</p>
+                      <h1 className="text-lg font-semibold text-white">Terminal intelligence</h1>
+                    </div>
                   </div>
                 </div>
-              )}
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="rounded-xl border border-white/10 p-2 text-white/55 transition hover:border-white/20 hover:bg-white/5 hover:text-white"
+                >
+                  <X size={16} />
+                </button>
+              </div>
 
-              {/* streaming */}
-              {isStreaming && (
-                <div className="py-4">
-                  {/* search sources */}
-                  {searchSources.length > 0 && (
-                    <div className="pl-8 mb-3">
-                      <div className="flex flex-wrap gap-1.5">
-                        {searchSources.map((s, i) => (
-                          <a
-                            key={i}
-                            href={s.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-[#1a1a1a] border border-[#2a2a2a] text-[10px] text-[#888] hover:text-nvidia-green hover:border-nvidia-green/30 transition-colors max-w-[200px]"
-                          >
-                            <Globe size={9} className="flex-shrink-0" />
-                            <span className="truncate">{s.title}</span>
-                          </a>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+              <div className="space-y-4 border-b border-white/10 px-5 py-4">
+                <button
+                  onClick={() => {
+                    setActiveConversation(null);
+                    setMessages([]);
+                    setSearchSources([]);
+                    if (isMobile) setSidebarOpen(false);
+                  }}
+                  className="flex w-full items-center justify-between rounded-2xl border border-[#76b900]/25 bg-[linear-gradient(135deg,rgba(118,185,0,0.14),rgba(118,185,0,0.04))] px-4 py-3.5 text-left shadow-[0_16px_40px_rgba(118,185,0,0.08)] transition hover:border-[#76b900]/40 hover:translate-y-[-1px]"
+                >
+                  <div>
+                    <p className="text-sm font-semibold text-white">New conversation</p>
+                    <p className="mt-1 text-xs text-white/55">Start a fresh terminal session.</p>
+                  </div>
+                  <Plus size={18} className="text-[#9ae61a]" />
+                </button>
 
-                  <StreamingThoughts reasoning={streamReasoning} />
-                  {streamContent ? (
-                    <div className="pl-8 markdown-body">
-                      <ReactMarkdown components={{ code: CodeBlock }} remarkPlugins={[remarkGfm]}>{streamContent}</ReactMarkdown>
-                      <span className="inline-block w-1.5 h-4 bg-nvidia-green animate-pulse ml-0.5 align-text-bottom rounded-sm" />
-                    </div>
-                  ) : !streamReasoning && !isSearching ? (
-                    <div className="pl-8 flex items-center gap-2 text-[#666] text-[12px]">
-                      <Loader2 size={13} className="animate-spin text-nvidia-green" /> Generating...
-                    </div>
-                  ) : null}
+                <div className="grid grid-cols-2 gap-3">
+                  <MetricCard label="Chats" value={String(conversations.length).padStart(2, "0")} icon={<MessageSquare size={15} />} />
+                  <MetricCard label="Sources" value={String(sourceCount).padStart(2, "0")} icon={<Search size={15} />} />
                 </div>
-              )}
-              <div className="h-4" />
-            </div>
-          )}
-        </div>
+              </div>
 
-        {/* ── Bottom Dock: model selector + input ── */}
-        <div className="border-t border-[#222] bg-surface px-4 md:px-4 px-2 py-3 bottom-dock">
-          <div className="max-w-3xl mx-auto space-y-2">
+              <div className="px-5 py-4">
+                <div className="mb-3 flex items-center justify-between">
+                  <p className="text-[11px] uppercase tracking-[0.28em] text-white/40">Recents</p>
+                  <span className="text-[11px] text-white/35">{conversations.length} threads</span>
+                </div>
+              </div>
 
-            {/* attachment previews */}
-            {attachments.length > 0 && (
-              <div className="flex flex-wrap gap-2 pb-2">
-                {attachments.map((f, i) => (
-                  f.type.startsWith("image/") ? (
-                    <div key={i} className="relative group rounded-lg overflow-hidden border border-[#2a2a2a] bg-[#1a1a1a]">
-                      <img
-                        src={URL.createObjectURL(f)}
-                        alt={f.name}
-                        className="h-20 w-auto max-w-[140px] object-cover attach-thumb"
-                        onLoad={(e) => URL.revokeObjectURL((e.target as HTMLImageElement).src)}
-                      />
-                      <button onClick={() => removeAttachment(i)}
-                        className="absolute top-1 right-1 p-0.5 bg-black/70 hover:bg-red-500/80 rounded-full text-white transition-colors opacity-0 group-hover:opacity-100">
-                        <X size={12} />
-                      </button>
-                      <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1.5 py-0.5">
-                        <span className="text-[9px] text-[#ccc] truncate block">{f.name}</span>
+              <div className="flex-1 space-y-2 overflow-y-auto px-3 pb-5">
+                {conversations.map((conversation, index) => (
+                  <motion.button
+                    key={conversation.id}
+                    layout
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: Math.min(index * 0.02, 0.14) }}
+                    onClick={() => loadMessages(conversation.id)}
+                    className={cn(
+                      "group relative flex w-full items-start gap-3 overflow-hidden rounded-2xl border px-3.5 py-3 text-left transition",
+                      activeConversation === conversation.id
+                        ? "border-[#76b900]/35 bg-[#76b900]/12 shadow-[0_12px_34px_rgba(118,185,0,0.10)]"
+                        : "border-white/8 bg-white/[0.03] hover:border-white/15 hover:bg-white/[0.06]"
+                    )}
+                  >
+                    <div className={cn("mt-0.5 rounded-xl border p-2", activeConversation === conversation.id ? "border-[#76b900]/40 bg-[#76b900]/10 text-[#9ae61a]" : "border-white/10 bg-black/20 text-white/45")}>
+                      <Command size={14} />
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <p className="truncate text-sm font-medium text-white">{conversation.title}</p>
+                        {index === 0 && <span className="rounded-full border border-white/10 px-1.5 py-0.5 text-[10px] text-white/40">Latest</span>}
                       </div>
+                      <p className="mt-1 truncate text-xs text-white/40">{conversation.updatedAt?.replace("T", " ").slice(0, 16) || "Awaiting activity"}</p>
                     </div>
-                  ) : (
-                    <div key={i} className="file-chip">
-                      <FileText size={12} className="text-nvidia-green flex-shrink-0" />
-                      <span>{f.name}</span>
-                      <button onClick={() => removeAttachment(i)} className="text-[#555] hover:text-red-400 ml-1"><X size={10} /></button>
-                    </div>
-                  )
+                    <button
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        deleteConversation(conversation.id);
+                      }}
+                      className="rounded-lg p-1.5 text-white/0 transition group-hover:text-white/45 hover:bg-red-500/10 hover:text-red-300"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </motion.button>
                 ))}
-              </div>
-            )}
 
-            {/* input row */}
-            <div className="flex items-end gap-2 bg-surface-2 border border-[#2a2a2a] rounded-lg p-1.5 focus-within:border-nvidia-green/50 transition-colors">
-              {/* attach */}
-              <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
-              <button onClick={() => fileInputRef.current?.click()} className="p-2 text-[#555] hover:text-white hover:bg-[#222] rounded-md transition-colors flex-shrink-0" title="Attach files">
-                <Paperclip size={15} />
-              </button>
-
-              {/* web search toggle */}
-              <button
-                onClick={() => setSearchEnabled(!searchEnabled)}
-                className={cn(
-                  "p-2 rounded-md transition-colors flex-shrink-0",
-                  searchEnabled
-                    ? "text-nvidia-green bg-nvidia-green/10 hover:bg-nvidia-green/20"
-                    : "text-[#555] hover:text-white hover:bg-[#222]"
-                )}
-                title={searchEnabled ? "Web search ON" : "Web search OFF"}
-              >
-                <Globe size={15} />
-              </button>
-
-              <textarea
-                ref={textareaRef}
-                value={input}
-                onChange={e => setInput(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
-                placeholder="Send a message..."
-                rows={1}
-                className="flex-1 bg-transparent text-[13px] text-[#d4d4d4] placeholder:text-[#555] resize-none py-2 px-1 focus:outline-none max-h-[160px] leading-relaxed"
-              />
-
-              <button onClick={sendMessage} disabled={(!input.trim() && !attachments.length) || isStreaming}
-                className={cn("p-2 rounded-md flex-shrink-0 transition-all",
-                  (input.trim() || attachments.length) && !isStreaming
-                    ? "bg-nvidia-green text-black hover:bg-nvidia-light"
-                    : "bg-[#222] text-[#555]"
-                )}>
-                {isStreaming ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              </button>
-            </div>
-
-            {/* model selector row */}
-            <div className="flex items-center justify-between">
-              <div className="relative" ref={modelPickerRef}>
-                <button onClick={() => setShowModelPicker(!showModelPicker)}
-                  className="flex items-center gap-1.5 text-[11px] font-mono text-[#666] hover:text-white transition-colors px-2 py-1 rounded hover:bg-[#1a1a1a]">
-                  <Cpu size={12} className="text-nvidia-green" />
-                  {selectedModel?.name || "select model"}
-                  <ChevronDown size={11} className={cn("transition-transform", showModelPicker && "rotate-180")} />
-                </button>
-
-                {showModelPicker && (
-                  <div className="model-picker-popup absolute bottom-full mb-2 left-0 w-[260px] bg-[#141414] border border-[#2a2a2a] rounded-lg shadow-2xl shadow-black/60 py-1 z-50">
-                    <p className="text-[10px] font-mono uppercase tracking-widest text-[#555] px-3 py-1.5">engines</p>
-                    {models.map(m => (
-                      <button key={m.id} onClick={() => { setSelectedModelId(m.id); setShowModelPicker(false); }}
-                        className={cn("w-full flex items-center gap-2 px-3 py-2 text-left transition-colors",
-                          selectedModelId === m.id ? "bg-nvidia-green/10 text-nvidia-green" : "text-[#aaa] hover:bg-[#1a1a1a] hover:text-white"
-                        )}>
-                        <span className={cn("w-1.5 h-1.5 rounded-full", selectedModelId === m.id ? "bg-nvidia-green" : "bg-[#333]")} />
-                        <div>
-                          <p className="text-[12px] font-medium leading-tight">{m.name}</p>
-                          <p className="text-[10px] text-[#555] font-mono">{m.provider} · {m.modelId}</p>
-                        </div>
-                      </button>
-                    ))}
-                    {!models.length && <p className="text-[11px] text-[#444] text-center py-3">No models configured</p>}
+                {!conversations.length && (
+                  <div className="rounded-2xl border border-dashed border-white/10 bg-white/[0.02] px-4 py-8 text-center">
+                    <Sparkles size={22} className="mx-auto mb-3 text-[#76b900]" />
+                    <p className="text-sm font-medium text-white">No conversations yet</p>
+                    <p className="mt-1 text-xs text-white/45">Create your first Claude-style terminal chat.</p>
                   </div>
                 )}
               </div>
-              <div className="flex items-center gap-3">
-                {searchEnabled && (
-                  <span className="flex items-center gap-1 text-[10px] font-mono text-nvidia-green">
-                    <Globe size={10} /> Web search
+
+              <div className="border-t border-white/10 px-5 py-4">
+                <a
+                  href="/settings"
+                  className="flex items-center justify-between rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/70 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
+                >
+                  <span className="inline-flex items-center gap-2">
+                    <Settings size={15} /> Configure models
                   </span>
-                )}
-                <span className="text-[10px] text-[#444] font-mono">AI can make mistakes</span>
+                  <ArrowRight size={14} className="text-[#9ae61a]" />
+                </a>
+              </div>
+            </motion.aside>
+          )}
+        </AnimatePresence>
+
+        <main className="relative flex min-w-0 flex-1 flex-col">
+          <header className="border-b border-white/10 bg-black/25 px-3 py-3 backdrop-blur-xl sm:px-5">
+            <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-3">
+              <div className="flex min-w-0 items-center gap-3">
+                <button
+                  onClick={() => setSidebarOpen((prev) => !prev)}
+                  className="rounded-xl border border-white/10 bg-white/[0.03] p-2 text-white/65 transition hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+                >
+                  <Menu size={17} />
+                </button>
+                <div className="min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="inline-flex items-center gap-2 rounded-full border border-[#76b900]/30 bg-[#76b900]/10 px-3 py-1 text-[11px] uppercase tracking-[0.26em] text-[#9ae61a]">
+                      <span className="h-2 w-2 rounded-full bg-[#9ae61a] shadow-[0_0_12px_rgba(154,230,26,0.85)]" />
+                      Live session
+                    </span>
+                    <span className="truncate text-sm font-semibold text-white">{activeConversationTitle || "New terminal conversation"}</span>
+                  </div>
+                  <p className="mt-1 truncate text-xs text-white/45">
+                    {selectedModel ? `${selectedModel.provider} · ${selectedModel.modelId}` : "Configure a model to begin streaming responses."}
+                  </p>
+                </div>
+              </div>
+
+              <div className="hidden items-center gap-2 md:flex">
+                <StatusPill icon={<Globe size={13} />} label={searchEnabled ? "Search armed" : "Search off"} active={searchEnabled} />
+                <StatusPill icon={<Cpu size={13} />} label={selectedModel?.name || "No model"} active />
               </div>
             </div>
+          </header>
+
+          <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-4 sm:px-5 sm:py-6">
+            <div className="mx-auto flex min-h-full w-full max-w-6xl flex-col">
+              {!messages.length && !isStreaming ? (
+                <EmptyState
+                  selectedModel={selectedModel}
+                  searchEnabled={searchEnabled}
+                  setInput={setInput}
+                  prompts={promptIdeas}
+                />
+              ) : (
+                <div className="mx-auto flex w-full max-w-4xl flex-1 flex-col gap-4 pb-6">
+                  <AnimatePresence initial={false}>
+                    {messages.map((message, index) => (
+                      <MessageBubble key={message.id} message={message} isLatest={index === messages.length - 1} />
+                    ))}
+                  </AnimatePresence>
+
+                  <AnimatePresence>
+                    {isSearching && (
+                      <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -8 }}
+                        className="ml-0 flex w-full max-w-3xl items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/60 shadow-[0_18px_40px_rgba(0,0,0,0.2)]"
+                      >
+                        <Globe size={16} className="text-[#76b900] animate-spin" />
+                        Searching the web for fresh context...
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+
+                  {isStreaming && (
+                    <StreamingPanel reasoning={streamReasoning} content={streamContent} searchSources={searchSources} />
+                  )}
+                </div>
+              )}
+            </div>
           </div>
-        </div>
-      </main>
+
+          <footer className="border-t border-white/10 bg-black/35 px-3 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 backdrop-blur-2xl sm:px-5 sm:pt-4">
+            <div className="mx-auto flex w-full max-w-4xl flex-col gap-3">
+              {attachments.length > 0 && (
+                <div className="flex flex-wrap gap-3">
+                  {attachments.map((file, index) => (
+                    <AttachmentPreview key={`${file.name}-${index}`} file={file} onRemove={() => removeAttachment(index)} />
+                  ))}
+                </div>
+              )}
+
+              <div className="rounded-[28px] border border-white/12 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.03))] p-2.5 shadow-[0_-12px_40px_rgba(0,0,0,0.28),0_18px_45px_rgba(118,185,0,0.06)] backdrop-blur-xl">
+                <div className="mb-2 flex flex-wrap items-center gap-2 px-1">
+                  <ToolbarChip
+                    icon={<Globe size={14} />}
+                    label={searchEnabled ? "Search on" : "Search"}
+                    active={searchEnabled}
+                    onClick={() => setSearchEnabled((prev) => !prev)}
+                  />
+                  <ToolbarChip
+                    icon={<Paperclip size={14} />}
+                    label="Attach"
+                    onClick={() => fileInputRef.current?.click()}
+                  />
+                  <div className="hidden sm:block h-5 w-px bg-white/10" />
+                  <p className="hidden text-xs text-white/35 sm:block">Streaming tuned for smooth token updates.</p>
+                </div>
+
+                <div className="flex items-end gap-2">
+                  <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
+                  <textarea
+                    ref={textareaRef}
+                    value={input}
+                    onChange={(event) => setInput(event.target.value)}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" && !event.shiftKey) {
+                        event.preventDefault();
+                        sendMessage();
+                      }
+                    }}
+                    rows={1}
+                    placeholder="Ask anything, inspect code, or draft an answer..."
+                    className="max-h-[220px] min-h-[66px] flex-1 resize-none bg-transparent px-3 py-3 text-[15px] leading-7 text-white placeholder:text-white/28 focus:outline-none"
+                  />
+                  <motion.button
+                    whileTap={{ scale: 0.96 }}
+                    onClick={sendMessage}
+                    disabled={(!input.trim() && !attachments.length) || isStreaming}
+                    className={cn(
+                      "mb-1 inline-flex h-12 w-12 items-center justify-center rounded-2xl border transition",
+                      (input.trim() || attachments.length) && !isStreaming
+                        ? "border-[#76b900]/40 bg-[#76b900] text-black shadow-[0_12px_28px_rgba(118,185,0,0.35)] hover:bg-[#8fd80b]"
+                        : "border-white/10 bg-white/[0.04] text-white/28"
+                    )}
+                  >
+                    {isStreaming ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
+                  </motion.button>
+                </div>
+
+                <div className="mt-2 flex flex-col gap-2 border-t border-white/8 px-1 pt-2.5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="relative" ref={modelPickerRef}>
+                    <button
+                      onClick={() => setShowModelPicker((prev) => !prev)}
+                      className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/65 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
+                    >
+                      <Cpu size={14} className="text-[#9ae61a]" />
+                      {selectedModel?.name || "Select model"}
+                      <ChevronDown size={13} className={cn("transition", showModelPicker && "rotate-180")} />
+                    </button>
+
+                    <AnimatePresence>
+                      {showModelPicker && (
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          exit={{ opacity: 0, y: 8 }}
+                          className="model-picker-popup absolute bottom-full left-0 z-50 mb-3 w-[320px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-3xl border border-white/12 bg-[#071015]/95 shadow-[0_25px_80px_rgba(0,0,0,0.45)] backdrop-blur-2xl"
+                        >
+                          <div className="border-b border-white/8 px-4 py-3">
+                            <p className="text-[11px] uppercase tracking-[0.28em] text-white/38">Models</p>
+                            <p className="mt-1 text-xs text-white/45">Switch providers without leaving the conversation.</p>
+                          </div>
+                          <div className="max-h-[320px] overflow-y-auto p-2">
+                            {models.map((model) => (
+                              <button
+                                key={model.id}
+                                onClick={() => {
+                                  setSelectedModelId(model.id);
+                                  setShowModelPicker(false);
+                                }}
+                                className={cn(
+                                  "mb-1.5 flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition last:mb-0",
+                                  selectedModelId === model.id
+                                    ? "border-[#76b900]/30 bg-[#76b900]/10 text-white"
+                                    : "border-white/8 bg-white/[0.03] text-white/68 hover:border-white/15 hover:bg-white/[0.05]"
+                                )}
+                              >
+                                <div className={cn("mt-0.5 h-2.5 w-2.5 rounded-full", selectedModelId === model.id ? "bg-[#9ae61a] shadow-[0_0_12px_rgba(154,230,26,0.7)]" : "bg-white/20")} />
+                                <div className="min-w-0">
+                                  <p className="truncate text-sm font-medium">{model.name}</p>
+                                  <p className="mt-1 truncate font-mono text-[11px] text-white/42">{model.provider} · {model.modelId}</p>
+                                </div>
+                              </button>
+                            ))}
+                            {!models.length && <p className="px-3 py-4 text-sm text-white/40">No models configured yet.</p>}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 text-xs text-white/35">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5">
+                      <Wand2 size={12} className="text-[#9ae61a]" />
+                      Shift + Enter for new line
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-white/10 px-3 py-1.5">
+                      <Compass size={12} className="text-[#9ae61a]" />
+                      Mobile and desktop optimized
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </footer>
+        </main>
+      </div>
     </div>
   );
 }
 
-/* ─── Thinking / Reasoning Stream (collapsed by default) ─── */
-function StreamingThoughts({ reasoning }: { reasoning: string }) {
+function EmptyState({
+  selectedModel,
+  searchEnabled,
+  setInput,
+  prompts,
+}: {
+  selectedModel?: Model;
+  searchEnabled: boolean;
+  setInput: (value: string) => void;
+  prompts: string[];
+}) {
+  return (
+    <div className="mx-auto flex w-full max-w-5xl flex-1 flex-col justify-center gap-8 py-8 md:py-12">
+      <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div className="rounded-[32px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))] p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-2xl sm:p-8">
+          <div className="inline-flex items-center gap-2 rounded-full border border-[#76b900]/30 bg-[#76b900]/10 px-3 py-1.5 text-[11px] uppercase tracking-[0.3em] text-[#9ae61a]">
+            <TerminalSquare size={13} />
+            Claude-inspired terminal UI
+          </div>
+          <h2 className="mt-5 max-w-2xl text-3xl font-semibold tracking-tight text-white sm:text-5xl">
+            Elegant chat surfaces with a sharper terminal soul.
+          </h2>
+          <p className="mt-4 max-w-2xl text-sm leading-7 text-white/62 sm:text-base">
+            A redesigned workspace with calm gradients, responsive cards, smooth streaming updates, and a focused composer for both desktop and mobile.
+          </p>
+
+          <div className="mt-6 grid gap-3 sm:grid-cols-3">
+            <HeroBadge title="Streaming" value="Smooth" icon={<Sparkles size={16} />} />
+            <HeroBadge title="Model" value={selectedModel?.name || "Unset"} icon={<Cpu size={16} />} />
+            <HeroBadge title="Web search" value={searchEnabled ? "Ready" : "Optional"} icon={<Globe size={16} />} />
+          </div>
+        </div>
+
+        <div className="rounded-[32px] border border-white/10 bg-black/30 p-6 shadow-[0_24px_70px_rgba(0,0,0,0.28)] backdrop-blur-2xl sm:p-8">
+          <div className="flex items-center gap-2 text-[11px] uppercase tracking-[0.28em] text-white/38">
+            <Command size={14} className="text-[#9ae61a]" />
+            Quick start
+          </div>
+          <div className="mt-5 space-y-3">
+            {prompts.map((prompt, index) => (
+              <button
+                key={prompt}
+                onClick={() => setInput(prompt)}
+                className="group flex w-full items-start justify-between gap-4 rounded-2xl border border-white/8 bg-white/[0.03] px-4 py-4 text-left transition hover:border-[#76b900]/30 hover:bg-[#76b900]/8"
+              >
+                <div>
+                  <p className="text-sm font-medium text-white">Prompt {String(index + 1).padStart(2, "0")}</p>
+                  <p className="mt-1 text-sm leading-6 text-white/55">{prompt}</p>
+                </div>
+                <ArrowRight size={16} className="mt-1 shrink-0 text-white/35 transition group-hover:text-[#9ae61a]" />
+              </button>
+            ))}
+          </div>
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
+function MetricCard({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-white/[0.04] px-3.5 py-3">
+      <div className="flex items-center justify-between text-white/42">
+        <span className="text-xs uppercase tracking-[0.22em]">{label}</span>
+        {icon}
+      </div>
+      <p className="mt-2 font-mono text-2xl text-white">{value}</p>
+    </div>
+  );
+}
+
+function StatusPill({ icon, label, active = false }: { icon: React.ReactNode; label: string; active?: boolean }) {
+  return (
+    <span className={cn("inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs", active ? "border-[#76b900]/25 bg-[#76b900]/10 text-white" : "border-white/10 bg-white/[0.03] text-white/55")}>
+      {icon}
+      {label}
+    </span>
+  );
+}
+
+function HeroBadge({ title, value, icon }: { title: string; value: string; icon: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-white/8 bg-black/25 px-4 py-3">
+      <div className="flex items-center gap-2 text-xs text-white/40">{icon}<span>{title}</span></div>
+      <p className="mt-2 truncate text-sm font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function ToolbarChip({
+  icon,
+  label,
+  active = false,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        "inline-flex items-center gap-2 rounded-full border px-3 py-2 text-xs transition",
+        active ? "border-[#76b900]/30 bg-[#76b900]/12 text-white" : "border-white/10 bg-white/[0.03] text-white/58 hover:border-white/20 hover:bg-white/[0.06] hover:text-white"
+      )}
+    >
+      <span className={active ? "text-[#9ae61a]" : "text-white/45"}>{icon}</span>
+      {label}
+    </button>
+  );
+}
+
+function AttachmentPreview({ file, onRemove }: { file: File; onRemove: () => void }) {
+  const [preview, setPreview] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!file.type.startsWith("image/")) return;
+    const url = URL.createObjectURL(file);
+    setPreview(url);
+    return () => URL.revokeObjectURL(url);
+  }, [file]);
+
+  if (file.type.startsWith("image/") && preview) {
+    return (
+      <div className="group relative overflow-hidden rounded-2xl border border-white/12 bg-black/35">
+        <img src={preview} alt={file.name} className="attach-thumb h-24 w-auto max-w-[160px] object-cover" />
+        <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent px-3 pb-2 pt-6">
+          <p className="truncate text-xs text-white/70">{file.name}</p>
+        </div>
+        <button onClick={onRemove} className="absolute right-2 top-2 rounded-full border border-white/15 bg-black/60 p-1 text-white/70 transition hover:border-red-400/40 hover:text-red-200">
+          <X size={12} />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.04] px-3 py-2 text-sm text-white/65">
+      <FileText size={14} className="text-[#9ae61a]" />
+      <span className="max-w-[180px] truncate">{file.name}</span>
+      <button onClick={onRemove} className="rounded-full p-1 text-white/40 transition hover:bg-white/5 hover:text-red-200">
+        <X size={12} />
+      </button>
+    </div>
+  );
+}
+
+function StreamingPanel({
+  reasoning,
+  content,
+  searchSources,
+}: {
+  reasoning: string;
+  content: string;
+  searchSources: Array<{ title: string; url: string }>;
+}) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 8 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="w-full"
+    >
+      {searchSources.length > 0 && (
+        <div className="mb-3 flex flex-wrap gap-2">
+          {searchSources.map((source, index) => (
+            <a
+              key={`${source.url}-${index}`}
+              href={source.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-2 rounded-full border border-white/12 bg-white/[0.04] px-3 py-2 text-xs text-white/58 transition hover:border-[#76b900]/30 hover:text-white"
+            >
+              <Globe size={12} className="text-[#9ae61a]" />
+              <span className="max-w-[220px] truncate">{source.title}</span>
+            </a>
+          ))}
+        </div>
+      )}
+
+      <MessageShell role="assistant" streaming>
+        <ThoughtsPanel reasoning={reasoning} />
+        {content ? (
+          <motion.div layout className="markdown-body stream-fade-in">
+            <ReactMarkdown components={{ code: CodeBlock }} remarkPlugins={[remarkGfm]}>
+              {content}
+            </ReactMarkdown>
+            <span className="ml-1 inline-block h-5 w-2 animate-[pulse_1s_ease-in-out_infinite] rounded-sm bg-[#9ae61a] align-middle" />
+          </motion.div>
+        ) : !reasoning ? (
+          <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/55">
+            <Loader2 size={14} className="animate-spin text-[#9ae61a]" />
+            Generating response...
+          </div>
+        ) : null}
+      </MessageShell>
+    </motion.div>
+  );
+}
+
+function ThoughtsPanel({ reasoning }: { reasoning?: string }) {
   const [open, setOpen] = useState(false);
   if (!reasoning) return null;
 
   return (
-    <div className="pl-8 mb-3">
-      <button onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 text-[11px] font-mono text-[#555] hover:text-nvidia-green transition-colors mb-1">
-        <Brain size={12} />
-        <span>{open ? "hide thinking" : "show thinking"}</span>
-        <ChevronDown size={10} className={cn("transition-transform", open && "rotate-180")} />
+    <div className="mb-4">
+      <button
+        onClick={() => setOpen((prev) => !prev)}
+        className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/58 transition hover:border-[#76b900]/25 hover:text-white"
+      >
+        <Brain size={13} className="text-[#9ae61a]" />
+        {open ? "Hide reasoning" : "Show reasoning"}
+        <ChevronDown size={13} className={cn("transition", open && "rotate-180")} />
       </button>
-      {open && (
-        <div className="mt-1 p-3 bg-[#111] border-l-2 border-nvidia-green/30 rounded text-[12px] font-mono text-[#777] leading-relaxed whitespace-pre-wrap break-words max-h-[300px] overflow-y-auto">
-          {reasoning}
-        </div>
-      )}
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
+          >
+            <div className="mt-3 rounded-2xl border border-[#76b900]/15 bg-[#76b900]/8 p-4 font-mono text-xs leading-6 text-white/68">
+              {reasoning}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-/* ─── Message Bubble ─── */
-function MessageBubble({ message }: { message: Message }) {
+function MessageShell({
+  role,
+  children,
+  streaming = false,
+}: {
+  role: "assistant" | "user";
+  children: React.ReactNode;
+  streaming?: boolean;
+}) {
+  const isUser = role === "user";
+
+  return (
+    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+      <div className={cn("flex w-full gap-3", isUser ? "max-w-2xl flex-row-reverse" : streaming ? "max-w-3xl" : "max-w-3xl")}>
+        <div
+          className={cn(
+            "mt-1 flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl border text-sm font-semibold",
+            isUser
+              ? "border-white/10 bg-white/[0.06] text-white"
+              : "border-[#76b900]/35 bg-[#76b900]/14 text-[#9ae61a]"
+          )}
+        >
+          {isUser ? "U" : "AI"}
+        </div>
+        <div
+          className={cn(
+            "w-full rounded-[26px] border px-5 py-4 shadow-[0_20px_55px_rgba(0,0,0,0.16)]",
+            isUser
+              ? "border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.06),rgba(255,255,255,0.025))]"
+              : "border-white/10 bg-[linear-gradient(180deg,rgba(6,12,15,0.98),rgba(8,10,12,0.92))]"
+          )}
+        >
+          {children}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MessageBubble({ message }: { message: Message; isLatest?: boolean }) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
-  const [showThoughts, setShowThoughts] = useState(false);
   const [showSources, setShowSources] = useState(false);
 
-  // Separate image attachments from source attachments
-  const imageAttachments = message.attachments?.filter(a => a.type !== "source") || [];
-  const sourceAttachments = message.attachments?.filter(a => a.type === "source") || [];
+  const imageAttachments = message.attachments?.filter((attachment) => attachment.type !== "source") || [];
+  const sourceAttachments = message.attachments?.filter((attachment) => attachment.type === "source") || [];
 
-  // Transform inline [N] citations into clickable links
-  function processContent(content: string): string {
-    if (sourceAttachments.length === 0) return content;
+  function processContent(content: string) {
+    if (!sourceAttachments.length) return content;
     return content.replace(/\[(\d+)\]/g, (match, num) => {
-      const idx = parseInt(num) - 1;
-      if (idx >= 0 && idx < sourceAttachments.length) {
-        const source = sourceAttachments[idx];
-        return `[\[${num}\]](${source.data})`;
+      const index = Number(num) - 1;
+      if (index >= 0 && index < sourceAttachments.length) {
+        return `[\\[${num}\\]](${sourceAttachments[index].data})`;
       }
       return match;
     });
@@ -649,70 +1083,62 @@ function MessageBubble({ message }: { message: Message }) {
 
   if (isSystem) {
     return (
-      <div className="flex justify-center py-3">
-        <span className="text-[11px] font-mono text-red-400 bg-red-500/5 border border-red-500/10 px-3 py-1 rounded-full">{message.content}</span>
-      </div>
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="flex justify-center">
+        <div className="rounded-full border border-red-500/20 bg-red-500/8 px-4 py-2 text-xs text-red-200">{message.content}</div>
+      </motion.div>
     );
   }
 
   return (
-    <div className={cn("py-4", isUser ? "border-b border-[#1a1a1a]" : "")}>
-      {/* header */}
-      <div className="flex items-center gap-2 mb-2">
-        <div className={cn("w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono flex-shrink-0",
-          isUser ? "bg-[#333] text-white" : "bg-nvidia-green text-black"
-        )}>
-          {isUser ? "U" : "N"}
-        </div>
-        <span className={cn("text-[12px] font-semibold", isUser ? "text-[#ccc]" : "text-nvidia-green")}>
-          {isUser ? "You" : "Assistant"}
-        </span>
-      </div>
-
-      {/* reasoning toggle */}
-      {message.reasoning && (
-        <div className="pl-7 mb-2">
-          <button onClick={() => setShowThoughts(!showThoughts)}
-            className="flex items-center gap-1.5 text-[11px] font-mono text-[#555] hover:text-nvidia-green transition-colors">
-            <Brain size={12} />
-            {showThoughts ? "hide thinking" : "show thinking"}
-            <ChevronDown size={10} className={cn("transition-transform", showThoughts && "rotate-180")} />
-          </button>
-          {showThoughts && (
-            <div className="mt-1.5 p-3 bg-[#111] border-l-2 border-nvidia-green/30 rounded text-[12px] font-mono text-[#777] leading-relaxed whitespace-pre-wrap break-words max-h-[300px] overflow-y-auto">
-              {message.reasoning}
-            </div>
+    <motion.div layout initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}>
+      <MessageShell role={isUser ? "user" : "assistant"}>
+        <div className="mb-2 flex items-center justify-between gap-3">
+          <div>
+            <p className="text-sm font-semibold text-white">{isUser ? "You" : "Assistant"}</p>
+            <p className="text-xs text-white/38">{message.createdAt?.replace("T", " ").slice(0, 16)}</p>
+          </div>
+          {!isUser && sourceAttachments.length > 0 && (
+            <button
+              onClick={() => setShowSources((prev) => !prev)}
+              className="inline-flex items-center gap-1.5 rounded-full border border-white/10 px-3 py-1.5 text-xs text-white/55 transition hover:border-[#76b900]/25 hover:text-white"
+            >
+              <Globe size={12} className="text-[#9ae61a]" />
+              {sourceAttachments.length} source{sourceAttachments.length > 1 ? "s" : ""}
+              <ChevronDown size={12} className={cn("transition", showSources && "rotate-180")} />
+            </button>
           )}
         </div>
-      )}
 
-      {/* image attachments */}
-      {imageAttachments.length > 0 && (
-        <div className="pl-7 mb-2 flex flex-wrap gap-2">
-          {imageAttachments.map((att, i) => (
-            <div key={i} className="relative group rounded-lg overflow-hidden border border-[#2a2a2a] bg-[#1a1a1a] cursor-pointer"
-              onClick={() => window.open(att.data, '_blank')}>
-              <img
-                src={att.data}
-                alt={att.name}
-                className="max-h-[240px] max-w-[360px] w-auto object-contain rounded-lg msg-image"
-              />
-              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/70 to-transparent px-2 py-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-[10px] text-white/80 font-mono truncate block">{att.name}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
+        {!isUser && <ThoughtsPanel reasoning={message.reasoning} />}
 
-      {/* content */}
-      <div className="pl-7">
+        {imageAttachments.length > 0 && (
+          <div className="mb-4 flex flex-wrap gap-3">
+            {imageAttachments.map((attachment, index) => (
+              <button
+                key={`${attachment.name}-${index}`}
+                onClick={() => window.open(attachment.data, "_blank")}
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-black/30 text-left"
+              >
+                {attachment.type.startsWith("image/") ? (
+                  <img src={attachment.data} alt={attachment.name} className="msg-image max-h-[280px] max-w-[360px] w-auto object-contain" />
+                ) : (
+                  <div className="flex items-center gap-3 px-4 py-3 text-sm text-white/70">
+                    <FileText size={15} className="text-[#9ae61a]" />
+                    <span>{attachment.name}</span>
+                  </div>
+                )}
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black to-transparent px-3 pb-2 pt-6 opacity-0 transition group-hover:opacity-100">
+                  <p className="text-xs text-white/75">{attachment.name}</p>
+                </div>
+              </button>
+            ))}
+          </div>
+        )}
+
         {isUser ? (
-          <p className="text-[13px] text-[#d4d4d4] whitespace-pre-wrap leading-relaxed">
-            {message.content.replace(/^\[Attached:.*?\]\n*/, '')}
-          </p>
+          <p className="whitespace-pre-wrap text-[15px] leading-7 text-white/88">{message.content.replace(/^\[Attached:[^\n]*\]\n*/, "")}</p>
         ) : (
-          <div className="markdown-body">
+          <div className="markdown-body text-[15px] leading-7 text-white/85">
             <ReactMarkdown
               components={{
                 code: CodeBlock,
@@ -728,37 +1154,28 @@ function MessageBubble({ message }: { message: Message }) {
             </ReactMarkdown>
           </div>
         )}
-      </div>
 
-      {/* search sources */}
-      {sourceAttachments.length > 0 && (
-        <div className="pl-7 mt-3">
-          <button
-            onClick={() => setShowSources(!showSources)}
-            className="flex items-center gap-1.5 text-[11px] font-mono text-[#555] hover:text-nvidia-green transition-colors mb-1.5"
-          >
-            <Globe size={12} />
-            <span>{sourceAttachments.length} source{sourceAttachments.length > 1 ? "s" : ""}</span>
-            <ChevronDown size={10} className={cn("transition-transform", showSources && "rotate-180")} />
-          </button>
-          {showSources && (
-            <div className="flex flex-wrap gap-1.5">
-              {sourceAttachments.map((s, i) => (
-                <a
-                  key={i}
-                  href={s.data}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-[#1a1a1a] border border-[#2a2a2a] hover:border-nvidia-green/30 transition-colors group"
-                >
-                  <span className="flex items-center justify-center w-4 h-4 rounded bg-[#222] text-[9px] font-mono font-bold text-nvidia-green">{i + 1}</span>
-                  <span className="text-[11px] text-[#888] group-hover:text-nvidia-green truncate max-w-[200px] sm:max-w-[280px]">{s.name}</span>
-                </a>
-              ))}
-            </div>
+        <AnimatePresence>
+          {showSources && sourceAttachments.length > 0 && (
+            <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
+              <div className="mt-4 flex flex-wrap gap-2">
+                {sourceAttachments.map((source, index) => (
+                  <a
+                    key={`${source.data}-${index}`}
+                    href={source.data}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/[0.04] px-3 py-2 text-xs text-white/62 transition hover:border-[#76b900]/25 hover:text-white"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#76b900]/12 font-mono text-[10px] text-[#9ae61a]">{index + 1}</span>
+                    <span className="max-w-[220px] truncate">{source.name}</span>
+                  </a>
+                ))}
+              </div>
+            </motion.div>
           )}
-        </div>
-      )}
-    </div>
+        </AnimatePresence>
+      </MessageShell>
+    </motion.div>
   );
 }

@@ -2,191 +2,240 @@
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --bg: #0c0c0c;
-  --surface: #141414;
-  --surface-2: #1a1a1a;
-  --border: #222;
-  --border-hover: #333;
-  --text: #d4d4d4;
-  --text-dim: #888;
-  --text-muted: #555;
-  --accent: #76B900;
-  --accent-dim: #5a8f00;
+  --bg: #05080b;
+  --surface: rgba(255, 255, 255, 0.04);
+  --surface-strong: rgba(255, 255, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.11);
+  --text: #f4f7f5;
+  --muted: rgba(244, 247, 245, 0.62);
+  --dim: rgba(244, 247, 245, 0.38);
+  --accent: #76b900;
+  --accent-2: #9ae61a;
 }
 
-* { margin: 0; padding: 0; box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html { color-scheme: dark; font-size: 14px; }
+html {
+  color-scheme: dark;
+  font-size: 15px;
+  scroll-behavior: smooth;
+}
 
 body {
+  min-height: 100vh;
+  margin: 0;
   background: var(--bg);
   color: var(--text);
   font-family: "Inter", system-ui, sans-serif;
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 4px; height: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-::-webkit-scrollbar-thumb:hover { background: #555; }
-
-/* Markdown */
-.markdown-body {
-  font-size: 0.875rem;
-  line-height: 1.75;
-  color: var(--text);
-  word-break: break-word;
-}
-.markdown-body p { margin-bottom: 0.75em; }
-.markdown-body p:last-child { margin-bottom: 0; }
-.markdown-body strong { color: #fff; font-weight: 600; }
-.markdown-body em { color: #bbb; }
-
-.markdown-body code:not(pre code) {
-  background: rgba(118,185,0,0.1);
-  border: 1px solid rgba(118,185,0,0.2);
-  border-radius: 4px;
-  padding: 1px 5px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.8em;
-  color: #a3d944;
-}
-
-.markdown-body pre {
-  margin: 0;
-  padding: 0;
-  background: transparent;
-  border: none;
-  overflow: visible;
-}
-
-.markdown-body pre code {
-  background: transparent;
-  border: none;
+a {
   color: inherit;
-  padding: 0;
+  text-decoration: none;
 }
 
-.markdown-body a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
-.markdown-body a:hover { color: #8FE800; }
-
-.markdown-body ul, .markdown-body ol { padding-left: 1.25em; margin-bottom: 0.75em; }
-.markdown-body li { margin-bottom: 0.25em; }
-.markdown-body li::marker { color: var(--text-muted); }
-
-.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
-  font-weight: 600;
-  margin-top: 1.25em;
-  margin-bottom: 0.5em;
-  color: #fff;
-}
-.markdown-body h1 { font-size: 1.25em; }
-.markdown-body h2 { font-size: 1.1em; }
-.markdown-body h3 { font-size: 1em; }
-
-.markdown-body blockquote {
-  border-left: 2px solid var(--accent);
-  padding-left: 0.75em;
-  color: var(--text-dim);
-  margin: 0.75em 0;
+button,
+input,
+textarea {
+  font: inherit;
 }
 
-.markdown-body table { border-collapse: collapse; width: 100%; margin: 0.75em 0; font-size: 0.85em; }
-.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 0.4em 0.6em; text-align: left; }
-.markdown-body th { background: var(--surface); font-weight: 600; color: #fff; }
-
-/* File chip */
-.file-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px;
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.75rem;
-  color: var(--text-dim);
-  max-width: 200px;
+textarea {
+  field-sizing: content;
 }
-.file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-/* ─── Mobile sidebar overlay ─── */
+::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(118, 185, 0, 0.55), rgba(255, 255, 255, 0.12));
+  background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, rgba(154, 230, 26, 0.7), rgba(255, 255, 255, 0.16));
+  background-clip: padding-box;
+}
+
+.terminal-grid {
+  background-image:
+    linear-gradient(rgba(118, 185, 0, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(118, 185, 0, 0.045) 1px, transparent 1px);
+  background-size: 36px 36px;
+  mask-image: radial-gradient(circle at center, black 30%, transparent 92%);
+}
+
 .sidebar-backdrop {
   position: fixed;
   inset: 0;
   z-index: 35;
-  background: rgba(0,0,0,0.6);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
-  animation: fadeIn 0.2s ease;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  animation: fade-in 0.2s ease;
 }
 
-@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+.markdown-body {
+  color: var(--text);
+  word-break: break-word;
+}
 
-/* ─── Mobile responsive ─── */
-@media (max-width: 768px) {
-  html { font-size: 15px; }
+.markdown-body > *:first-child {
+  margin-top: 0;
+}
 
-  /* Sidebar becomes fixed overlay on mobile */
+.markdown-body > *:last-child {
+  margin-bottom: 0;
+}
+
+.markdown-body p,
+.markdown-body ul,
+.markdown-body ol,
+.markdown-body pre,
+.markdown-body blockquote,
+.markdown-body table {
+  margin: 0 0 1rem;
+}
+
+.markdown-body strong {
+  color: #fff;
+  font-weight: 650;
+}
+
+.markdown-body em {
+  color: rgba(255, 255, 255, 0.82);
+}
+
+.markdown-body a {
+  color: #b5f35c;
+  text-decoration: underline;
+  text-decoration-color: rgba(181, 243, 92, 0.38);
+  text-underline-offset: 3px;
+  transition: color 0.2s ease;
+}
+
+.markdown-body a:hover {
+  color: #d9ff9b;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.35rem;
+}
+
+.markdown-body li {
+  margin-bottom: 0.35rem;
+}
+
+.markdown-body li::marker {
+  color: rgba(181, 243, 92, 0.62);
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 1.4rem 0 0.8rem;
+  color: #fff;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.markdown-body h1 { font-size: 1.5rem; }
+.markdown-body h2 { font-size: 1.28rem; }
+.markdown-body h3 { font-size: 1.08rem; }
+
+.markdown-body blockquote {
+  border-left: 3px solid rgba(118, 185, 0, 0.65);
+  background: rgba(118, 185, 0, 0.07);
+  border-radius: 0 16px 16px 0;
+  padding: 0.9rem 1rem;
+  color: rgba(255, 255, 255, 0.72);
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  overflow: hidden;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.markdown-body th,
+.markdown-body td {
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  padding: 0.75rem 0.9rem;
+  text-align: left;
+}
+
+.markdown-body th {
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+}
+
+.markdown-body tr:last-child td {
+  border-bottom: none;
+}
+
+.stream-fade-in {
+  animation: stream-appear 220ms ease-out;
+}
+
+@keyframes stream-appear {
+  from {
+    opacity: 0.75;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (max-width: 1024px) {
   .mobile-sidebar {
-    position: fixed !important;
-    top: 0;
-    left: 0;
-    bottom: 0;
-    z-index: 40;
-    width: 280px !important;
-    box-shadow: 8px 0 32px rgba(0,0,0,0.5);
+    width: min(88vw, 320px);
+    box-shadow: 24px 0 70px rgba(0, 0, 0, 0.35);
+  }
+}
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
   }
 
-  .mobile-sidebar-closed {
-    width: 0 !important;
-    overflow: hidden;
-  }
-
-  /* Bottom dock: safe area for phones with home indicator */
-  .bottom-dock {
-    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
-  }
-
-  /* Message images scale to fit screen */
-  .msg-image {
-    max-width: 85vw !important;
-    max-height: 200px !important;
-  }
-
-  /* Attachment thumbnails */
-  .attach-thumb {
-    height: 64px !important;
-    max-width: 100px !important;
-  }
-
-  /* Model picker popup */
-  .model-picker-popup {
-    width: calc(100vw - 2rem) !important;
-    max-width: 320px;
-    left: 0 !important;
-  }
-
-  /* Tables scroll horizontally */
   .markdown-body table {
     display: block;
     overflow-x: auto;
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Larger tap targets */
-  button { min-height: 36px; min-width: 36px; }
-  .sidebar-btn { min-height: 40px; }
-}
+  .msg-image {
+    max-width: min(100%, 78vw);
+  }
 
-/* Small phone (< 380px) */
-@media (max-width: 380px) {
-  .mobile-sidebar {
-    width: 100vw !important;
+  .attach-thumb {
+    max-width: 124px;
   }
 }

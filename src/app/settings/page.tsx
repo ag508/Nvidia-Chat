@@ -1,17 +1,45 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
 import {
-  ArrowLeft, Plus, Trash2, X, Check, Server, Key, Globe, Cpu, Eye, EyeOff, AlertCircle, Edit2
+  AlertCircle,
+  ArrowLeft,
+  Check,
+  ChevronRight,
+  Cpu,
+  Edit2,
+  Eye,
+  EyeOff,
+  Globe,
+  Key,
+  Plus,
+  Server,
+  ShieldCheck,
+  Sparkles,
+  Trash2,
+  X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Model } from "@/lib/types";
 
 interface ModelForm {
-  name: string; provider: string; baseUrl: string; modelId: string; apiKey: string; isDefault: boolean;
+  name: string;
+  provider: string;
+  baseUrl: string;
+  modelId: string;
+  apiKey: string;
+  isDefault: boolean;
 }
 
-const EMPTY: ModelForm = { name: "", provider: "", baseUrl: "", modelId: "", apiKey: "", isDefault: false };
+const EMPTY: ModelForm = {
+  name: "",
+  provider: "",
+  baseUrl: "",
+  modelId: "",
+  apiKey: "",
+  isDefault: false,
+};
 
 const PRESETS = [
   { name: "NVIDIA NIM", baseUrl: "https://integrate.api.nvidia.com/v1", hint: "build.nvidia.com" },
@@ -19,7 +47,7 @@ const PRESETS = [
   { name: "Groq", baseUrl: "https://api.groq.com/openai/v1", hint: "console.groq.com" },
   { name: "Together AI", baseUrl: "https://api.together.xyz/v1", hint: "together.ai" },
   { name: "OpenRouter", baseUrl: "https://openrouter.ai/api/v1", hint: "openrouter.ai" },
-  { name: "Custom", baseUrl: "", hint: "any OpenAI-compatible API" },
+  { name: "Custom", baseUrl: "", hint: "any OpenAI-compatible endpoint" },
 ];
 
 export default function SettingsPage() {
@@ -27,226 +55,400 @@ export default function SettingsPage() {
   const [showAdd, setShowAdd] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<ModelForm>(EMPTY);
-  const [selProv, setSelProv] = useState("");
+  const [selectedProvider, setSelectedProvider] = useState("");
   const [showKeys, setShowKeys] = useState<Record<string, boolean>>({});
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => { fetchModels(); }, []);
+  useEffect(() => {
+    fetchModels();
+  }, []);
 
-  async function fetchModels() { setModels(await fetch("/api/models").then(r => r.json())); }
+  async function fetchModels() {
+    setModels(await fetch("/api/models").then((response) => response.json()));
+  }
 
-  function startEdit(m: Model) {
-    setEditingId(m.id);
-    setForm({ name: m.name, provider: m.provider, baseUrl: m.baseUrl, modelId: m.modelId, apiKey: m.apiKey, isDefault: m.isDefault });
+  function startEdit(model: Model) {
+    setEditingId(model.id);
+    setForm({
+      name: model.name,
+      provider: model.provider,
+      baseUrl: model.baseUrl,
+      modelId: model.modelId,
+      apiKey: model.apiKey,
+      isDefault: model.isDefault,
+    });
+    setSelectedProvider(model.provider);
     setShowAdd(false);
   }
 
-  function startAdd() { setEditingId(null); setForm(EMPTY); setSelProv(""); setShowAdd(true); }
+  function startAdd() {
+    setEditingId(null);
+    setForm(EMPTY);
+    setSelectedProvider("");
+    setShowAdd(true);
+  }
 
   async function saveModel() {
     setSaving(true);
     try {
       const method = editingId ? "PUT" : "POST";
       const body = editingId ? { id: editingId, ...form } : form;
-      await fetch("/api/models", { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+      await fetch("/api/models", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       await fetchModels();
-      setShowAdd(false); setEditingId(null); setForm(EMPTY);
-    } finally { setSaving(false); }
+      setShowAdd(false);
+      setEditingId(null);
+      setForm(EMPTY);
+      setSelectedProvider("");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function deleteModel(id: string) {
     await fetch(`/api/models?id=${id}`, { method: "DELETE" });
-    fetchModels();
-    if (editingId === id) { setEditingId(null); setForm(EMPTY); }
+    await fetchModels();
+    if (editingId === id) {
+      setEditingId(null);
+      setForm(EMPTY);
+      setSelectedProvider("");
+    }
   }
 
-  function pickPreset(p: typeof PRESETS[0]) {
-    setSelProv(p.name);
-    setForm(f => ({ ...f, provider: p.name, baseUrl: p.baseUrl }));
+  function pickPreset(preset: (typeof PRESETS)[number]) {
+    setSelectedProvider(preset.name);
+    setForm((current) => ({ ...current, provider: preset.name, baseUrl: preset.baseUrl }));
   }
 
   return (
-    <div className="min-h-screen bg-bg text-[#d4d4d4] text-[13px]">
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(118,185,0,0.16),_transparent_24%),linear-gradient(180deg,#071015_0%,#05080b_45%,#040506_100%)] text-white">
+      <div className="pointer-events-none fixed inset-0 opacity-60">
+        <div className="terminal-grid absolute inset-0" />
+      </div>
 
-      {/* header */}
-      <header className="sticky top-0 z-50 bg-surface border-b border-[#222]">
-        <div className="max-w-3xl mx-auto px-4 h-12 flex items-center gap-3">
-          <a href="/" className="p-1.5 hover:bg-[#222] rounded text-[#888] hover:text-white transition-colors">
-            <ArrowLeft size={16} />
-          </a>
-          <div className="w-5 h-5 rounded bg-nvidia-green flex items-center justify-center">
-            <span className="text-black font-bold text-[10px] font-mono">N</span>
-          </div>
-          <h1 className="text-[14px] font-semibold text-white">Settings</h1>
-        </div>
-      </header>
-
-      <div className="max-w-3xl mx-auto px-3 sm:px-4 py-6 sm:py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h2 className="text-[16px] font-semibold text-white mb-1">Model Endpoints</h2>
-            <p className="text-[12px] text-[#666]">Configure OpenAI-compatible API endpoints</p>
-          </div>
-          <button onClick={startAdd} className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium text-nvidia-green border border-nvidia-green/30 hover:bg-nvidia-green/10 transition-colors">
-            <Plus size={14} /> Add
-          </button>
-        </div>
-
-        {/* models list */}
-        <div className="space-y-2">
-          {models.map(m => editingId === m.id ? (
-            <FormCard key={m.id} form={form} setForm={setForm} onSave={saveModel} onCancel={() => { setEditingId(null); setForm(EMPTY); }} saving={saving} isEdit presets={PRESETS} selProv={form.provider} pickPreset={pickPreset} />
-          ) : (
-            <div key={m.id} className="group p-4 bg-surface border border-[#222] hover:border-[#333] rounded-lg transition-colors">
-              <div className="flex items-start justify-between">
-                <div className="flex items-start gap-3 flex-1 min-w-0">
-                  <div className={cn("w-8 h-8 rounded flex items-center justify-center flex-shrink-0 text-[13px] font-mono font-bold",
-                    m.isDefault ? "bg-nvidia-green/10 text-nvidia-green border border-nvidia-green/20" : "bg-[#1a1a1a] text-[#555] border border-[#222]"
-                  )}>
-                    <Cpu size={14} />
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[13px] font-semibold text-white">{m.name}</span>
-                      {m.isDefault && <span className="text-[9px] font-mono uppercase tracking-widest px-1.5 py-0.5 bg-nvidia-green/10 text-nvidia-green rounded border border-nvidia-green/20">default</span>}
-                    </div>
-                    <div className="flex flex-wrap items-center gap-x-3 sm:gap-x-4 gap-y-1 text-[11px] text-[#666] font-mono">
-                      <span className="flex items-center gap-1"><Server size={10} />{m.provider}</span>
-                      <span className="flex items-center gap-1 truncate max-w-[150px] sm:max-w-none"><Globe size={10} />{m.baseUrl.replace("https://", "").split("/")[0]}</span>
-                      <span className="flex items-center gap-1 truncate max-w-[120px] sm:max-w-none"><Cpu size={10} />{m.modelId}</span>
-                    </div>
-                    <div className="flex items-center gap-2 mt-2 text-[11px] font-mono">
-                      <Key size={10} className={m.apiKey ? "text-nvidia-green" : "text-yellow-500"} />
-                      <span className={m.apiKey ? "text-[#666]" : "text-yellow-500/60"}>
-                        {m.apiKey ? (showKeys[m.id] ? m.apiKey : "••••" + m.apiKey.slice(-4)) : "not set"}
-                      </span>
-                      {m.apiKey && (
-                        <button onClick={() => setShowKeys(s => ({ ...s, [m.id]: !s[m.id] }))} className="text-[#555] hover:text-white">
-                          {showKeys[m.id] ? <EyeOff size={11} /> : <Eye size={11} />}
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <button onClick={() => startEdit(m)} className="p-1.5 hover:bg-[#222] rounded text-[#666] hover:text-white transition-colors"><Edit2 size={13} /></button>
-                  <button onClick={() => deleteModel(m.id)} className="p-1.5 hover:bg-red-500/10 rounded text-[#666] hover:text-red-400 transition-colors"><Trash2 size={13} /></button>
-                </div>
+      <div className="relative mx-auto max-w-6xl px-4 py-4 sm:px-6 sm:py-6">
+        <header className="mb-6 rounded-[28px] border border-white/10 bg-black/35 p-4 shadow-[0_24px_80px_rgba(0,0,0,0.28)] backdrop-blur-2xl sm:p-6">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-4">
+              <a
+                href="/"
+                className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-white/10 bg-white/[0.03] text-white/65 transition hover:border-white/20 hover:bg-white/[0.05] hover:text-white"
+              >
+                <ArrowLeft size={18} />
+              </a>
+              <div>
+                <p className="text-[11px] uppercase tracking-[0.28em] text-[#9ae61a]">MODEL CONTROL</p>
+                <h1 className="mt-1 text-2xl font-semibold tracking-tight text-white sm:text-3xl">Refined provider workspace</h1>
+                <p className="mt-2 max-w-2xl text-sm leading-7 text-white/58">
+                  Configure OpenAI-compatible endpoints with a cleaner, more premium control panel that matches the redesigned chat interface.
+                </p>
               </div>
             </div>
-          ))}
 
-          {!models.length && !showAdd && (
-            <div className="text-center py-12 bg-surface border border-[#222] rounded-lg">
-              <Cpu size={28} className="mx-auto text-[#333] mb-3" />
-              <p className="text-[#666] text-[12px] mb-3">No models configured</p>
-              <button onClick={startAdd} className="text-nvidia-green text-[12px] hover:underline">Add your first model</button>
+            <button
+              onClick={startAdd}
+              className="inline-flex items-center gap-2 rounded-2xl border border-[#76b900]/30 bg-[#76b900]/12 px-4 py-3 text-sm font-medium text-white shadow-[0_14px_40px_rgba(118,185,0,0.1)] transition hover:border-[#76b900]/45 hover:bg-[#76b900]/18"
+            >
+              <Plus size={16} className="text-[#9ae61a]" />
+              Add model
+            </button>
+          </div>
+        </header>
+
+        <section className="mb-6 grid gap-4 md:grid-cols-3">
+          <SettingsMetric label="Configured" value={String(models.length).padStart(2, "0")} icon={<Cpu size={16} />} />
+          <SettingsMetric label="Default ready" value={models.some((model) => model.isDefault) ? "Yes" : "No"} icon={<Check size={16} />} />
+          <SettingsMetric label="Security" value="Local SQLite" icon={<ShieldCheck size={16} />} />
+        </section>
+
+        <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
+          <section className="space-y-3">
+            <AnimatePresence initial={false}>
+              {models.map((model) =>
+                editingId === model.id ? (
+                  <FormCard
+                    key={model.id}
+                    form={form}
+                    setForm={setForm}
+                    onSave={saveModel}
+                    onCancel={() => {
+                      setEditingId(null);
+                      setForm(EMPTY);
+                      setSelectedProvider("");
+                    }}
+                    saving={saving}
+                    isEdit
+                    presets={PRESETS}
+                    selectedProvider={selectedProvider}
+                    pickPreset={pickPreset}
+                  />
+                ) : (
+                  <motion.div
+                    key={model.id}
+                    layout
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -10 }}
+                    className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(255,255,255,0.055),rgba(255,255,255,0.025))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-2xl"
+                  >
+                    <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                      <div className="flex min-w-0 gap-4">
+                        <div className={cn("mt-1 flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl border", model.isDefault ? "border-[#76b900]/35 bg-[#76b900]/12 text-[#9ae61a]" : "border-white/10 bg-white/[0.03] text-white/55")}>
+                          <Cpu size={18} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h2 className="text-lg font-semibold text-white">{model.name}</h2>
+                            {model.isDefault && <span className="rounded-full border border-[#76b900]/25 bg-[#76b900]/10 px-2 py-1 text-[10px] uppercase tracking-[0.24em] text-[#9ae61a]">Default</span>}
+                          </div>
+                          <div className="mt-3 grid gap-2 text-sm text-white/55 sm:grid-cols-2">
+                            <InfoChip icon={<Server size={13} />} label={model.provider} />
+                            <InfoChip icon={<Globe size={13} />} label={model.baseUrl.replace(/^https?:\/\//, "").split("/")[0]} />
+                            <InfoChip icon={<Cpu size={13} />} label={model.modelId} />
+                            <InfoChip
+                              icon={<Key size={13} />}
+                              label={model.apiKey ? (showKeys[model.id] ? model.apiKey : `••••${model.apiKey.slice(-4)}`) : "API key not set"}
+                              action={
+                                model.apiKey ? (
+                                  <button onClick={() => setShowKeys((current) => ({ ...current, [model.id]: !current[model.id] }))} className="rounded-full p-1 text-white/45 transition hover:bg-white/5 hover:text-white">
+                                    {showKeys[model.id] ? <EyeOff size={13} /> : <Eye size={13} />}
+                                  </button>
+                                ) : undefined
+                              }
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-2 self-start">
+                        <button onClick={() => startEdit(model)} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-3 py-2 text-sm text-white/65 transition hover:border-white/20 hover:text-white">
+                          <Edit2 size={14} /> Edit
+                        </button>
+                        <button onClick={() => deleteModel(model.id)} className="inline-flex items-center gap-2 rounded-2xl border border-red-500/20 bg-red-500/8 px-3 py-2 text-sm text-red-200 transition hover:border-red-400/30 hover:bg-red-500/12">
+                          <Trash2 size={14} /> Delete
+                        </button>
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              )}
+            </AnimatePresence>
+
+            {!models.length && !showAdd && (
+              <div className="rounded-[28px] border border-dashed border-white/12 bg-black/25 p-10 text-center shadow-[0_24px_80px_rgba(0,0,0,0.18)] backdrop-blur-2xl">
+                <Sparkles size={28} className="mx-auto mb-3 text-[#9ae61a]" />
+                <h3 className="text-lg font-semibold text-white">No models configured</h3>
+                <p className="mt-2 text-sm text-white/55">Add a provider to start chatting from the redesigned interface.</p>
+                <button onClick={startAdd} className="mt-5 inline-flex items-center gap-2 rounded-2xl border border-[#76b900]/30 bg-[#76b900]/12 px-4 py-3 text-sm text-white transition hover:border-[#76b900]/45 hover:bg-[#76b900]/18">
+                  <Plus size={15} className="text-[#9ae61a]" /> Add your first model
+                </button>
+              </div>
+            )}
+
+            {showAdd && (
+              <FormCard
+                form={form}
+                setForm={setForm}
+                onSave={saveModel}
+                onCancel={() => {
+                  setShowAdd(false);
+                  setForm(EMPTY);
+                  setSelectedProvider("");
+                }}
+                saving={saving}
+                isEdit={false}
+                presets={PRESETS}
+                selectedProvider={selectedProvider}
+                pickPreset={pickPreset}
+              />
+            )}
+          </section>
+
+          <aside className="space-y-4">
+            <div className="rounded-[28px] border border-white/10 bg-black/30 p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
+              <p className="text-[11px] uppercase tracking-[0.28em] text-[#9ae61a]">Best practices</p>
+              <ul className="mt-4 space-y-3 text-sm leading-7 text-white/58">
+                <li className="flex gap-3"><ChevronRight size={16} className="mt-1 shrink-0 text-[#9ae61a]" />Use provider presets to prefill compatible base URLs quickly.</li>
+                <li className="flex gap-3"><ChevronRight size={16} className="mt-1 shrink-0 text-[#9ae61a]" />Keep one default model so new chats always open with a valid runtime target.</li>
+                <li className="flex gap-3"><ChevronRight size={16} className="mt-1 shrink-0 text-[#9ae61a]" />For local endpoints, ensure Docker networking exposes the model server to this app.</li>
+              </ul>
             </div>
-          )}
 
-          {showAdd && (
-            <FormCard form={form} setForm={setForm} onSave={saveModel} onCancel={() => { setShowAdd(false); setForm(EMPTY); }} saving={saving} isEdit={false} presets={PRESETS} selProv={selProv} pickPreset={pickPreset} />
-          )}
-        </div>
-
-        {/* info */}
-        <div className="mt-8 p-4 bg-surface border border-[#222] rounded-lg">
-          <h3 className="text-[12px] font-semibold text-nvidia-green flex items-center gap-1.5 mb-2">
-            <AlertCircle size={13} /> Security
-          </h3>
-          <p className="text-[11px] text-[#666] leading-relaxed">
-            API keys are stored locally in SQLite. They are only sent to the endpoint you configure during inference over TLS.
-          </p>
+            <div className="rounded-[28px] border border-white/10 bg-[linear-gradient(180deg,rgba(118,185,0,0.12),rgba(118,185,0,0.05))] p-6 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-2xl">
+              <h3 className="flex items-center gap-2 text-sm font-semibold text-white">
+                <AlertCircle size={16} className="text-[#9ae61a]" /> Security notes
+              </h3>
+              <p className="mt-3 text-sm leading-7 text-white/60">
+                API keys are stored locally in SQLite and only transmitted to the endpoint you explicitly configure when a request is sent.
+              </p>
+            </div>
+          </aside>
         </div>
       </div>
     </div>
   );
 }
 
-/* form */
-function FormCard({ form, setForm, onSave, onCancel, saving, isEdit, presets, selProv, pickPreset }: any) {
-  const [showKey, setShowKey] = useState(false);
+function SettingsMetric({ label, value, icon }: { label: string; value: string; icon: React.ReactNode }) {
   return (
-    <div className="p-4 bg-surface-2 border border-nvidia-green/20 rounded-lg">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-[13px] font-semibold text-white">{isEdit ? "Edit model" : "Add model"}</h3>
-        <button onClick={onCancel} className="p-1 hover:bg-[#222] rounded text-[#666] hover:text-white"><X size={14} /></button>
+    <div className="rounded-[24px] border border-white/10 bg-black/30 px-5 py-4 shadow-[0_18px_50px_rgba(0,0,0,0.18)] backdrop-blur-2xl">
+      <div className="flex items-center justify-between text-white/42">
+        <span className="text-xs uppercase tracking-[0.24em]">{label}</span>
+        {icon}
+      </div>
+      <p className="mt-3 text-xl font-semibold text-white">{value}</p>
+    </div>
+  );
+}
+
+function InfoChip({ icon, label, action }: { icon: React.ReactNode; label: string; action?: React.ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-2xl border border-white/8 bg-white/[0.03] px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-2">
+        <span className="text-[#9ae61a]">{icon}</span>
+        <span className="truncate">{label}</span>
+      </div>
+      {action}
+    </div>
+  );
+}
+
+function FormCard({
+  form,
+  setForm,
+  onSave,
+  onCancel,
+  saving,
+  isEdit,
+  presets,
+  selectedProvider,
+  pickPreset,
+}: any) {
+  const [showKey, setShowKey] = useState(false);
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -10 }}
+      className="rounded-[28px] border border-[#76b900]/18 bg-[linear-gradient(180deg,rgba(118,185,0,0.08),rgba(255,255,255,0.03))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.22)] backdrop-blur-2xl"
+    >
+      <div className="mb-5 flex items-center justify-between gap-3">
+        <div>
+          <p className="text-[11px] uppercase tracking-[0.28em] text-[#9ae61a]">{isEdit ? "Edit endpoint" : "New endpoint"}</p>
+          <h3 className="mt-1 text-xl font-semibold text-white">{isEdit ? "Refine model configuration" : "Add a provider"}</h3>
+        </div>
+        <button onClick={onCancel} className="rounded-2xl border border-white/10 p-2 text-white/55 transition hover:border-white/20 hover:text-white">
+          <X size={16} />
+        </button>
       </div>
 
       {!isEdit && (
-        <div className="mb-4">
-          <label className="block text-[10px] font-mono uppercase tracking-widest text-[#555] mb-2">Provider</label>
-          <div className="flex flex-wrap gap-1.5">
-            {presets.map((p: any) => (
-              <button key={p.name} onClick={() => pickPreset(p)}
-                className={cn("px-2.5 py-1.5 rounded text-[11px] font-medium border transition-colors",
-                  selProv === p.name ? "bg-nvidia-green/10 border-nvidia-green/30 text-nvidia-green" : "bg-[#141414] border-[#222] text-[#888] hover:text-white hover:border-[#333]"
-                )}>
-                {p.name}
+        <div className="mb-5">
+          <label className="mb-2 block text-[11px] uppercase tracking-[0.24em] text-white/40">Provider preset</label>
+          <div className="flex flex-wrap gap-2">
+            {presets.map((preset: any) => (
+              <button
+                key={preset.name}
+                onClick={() => pickPreset(preset)}
+                className={cn(
+                  "rounded-full border px-3 py-2 text-sm transition",
+                  selectedProvider === preset.name
+                    ? "border-[#76b900]/35 bg-[#76b900]/12 text-white"
+                    : "border-white/10 bg-white/[0.03] text-white/58 hover:border-white/18 hover:text-white"
+                )}
+              >
+                {preset.name}
               </button>
             ))}
           </div>
-          {selProv && <p className="text-[10px] text-[#555] mt-1.5 font-mono">{presets.find((p: any) => p.name === selProv)?.hint}</p>}
+          {selectedProvider && <p className="mt-2 text-xs text-white/45">Preset hint: {presets.find((preset: any) => preset.name === selectedProvider)?.hint}</p>}
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-3">
-        <Field label="Name" value={form.name} onChange={(v: string) => setForm((f: any) => ({ ...f, name: v }))} placeholder="e.g. GPT-4o" icon={<Cpu size={12} />} />
-        <Field label="Model ID" value={form.modelId} onChange={(v: string) => setForm((f: any) => ({ ...f, modelId: v }))} placeholder="e.g. gpt-4o" icon={<Server size={12} />} />
+      <div className="grid gap-4 sm:grid-cols-2">
+        <Field label="Name" value={form.name} onChange={(value: string) => setForm((current: any) => ({ ...current, name: value }))} placeholder="GPT-4o" icon={<Cpu size={14} />} />
+        <Field label="Model ID" value={form.modelId} onChange={(value: string) => setForm((current: any) => ({ ...current, modelId: value }))} placeholder="gpt-4o" icon={<Server size={14} />} />
       </div>
-      <div className="mb-3">
-        <Field label="Base URL" value={form.baseUrl} onChange={(v: string) => setForm((f: any) => ({ ...f, baseUrl: v }))} placeholder="https://api.openai.com/v1" icon={<Globe size={12} />} />
+
+      <div className="mt-4 grid gap-4">
+        <Field label="Provider" value={form.provider} onChange={(value: string) => setForm((current: any) => ({ ...current, provider: value }))} placeholder="OpenAI" icon={<Sparkles size={14} />} />
+        <Field label="Base URL" value={form.baseUrl} onChange={(value: string) => setForm((current: any) => ({ ...current, baseUrl: value }))} placeholder="https://api.openai.com/v1" icon={<Globe size={14} />} />
       </div>
-      <div className="mb-3">
-        <label className="block text-[10px] font-mono uppercase tracking-widest text-[#555] mb-1.5">API Key</label>
+
+      <div className="mt-4">
+        <label className="mb-2 block text-[11px] uppercase tracking-[0.24em] text-white/40">API key</label>
         <div className="relative">
-          <Key size={12} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#555]" />
-          <input type={showKey ? "text" : "password"} value={form.apiKey}
-            onChange={e => setForm((f: any) => ({ ...f, apiKey: e.target.value }))}
+          <Key size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9ae61a]" />
+          <input
+            type={showKey ? "text" : "password"}
+            value={form.apiKey}
+            onChange={(event) => setForm((current: any) => ({ ...current, apiKey: event.target.value }))}
             placeholder="sk-..."
-            className="w-full bg-[#141414] border border-[#222] rounded-md px-2.5 py-2 pl-8 pr-8 text-[12px] font-mono text-[#d4d4d4] placeholder:text-[#444] focus:outline-none focus:border-nvidia-green/40" />
-          <button onClick={() => setShowKey(!showKey)} className="absolute right-2.5 top-1/2 -translate-y-1/2 text-[#555] hover:text-white">
-            {showKey ? <EyeOff size={12} /> : <Eye size={12} />}
+            className="w-full rounded-2xl border border-white/10 bg-black/25 px-11 py-3 text-sm text-white placeholder:text-white/28 focus:border-[#76b900]/35 focus:outline-none"
+          />
+          <button onClick={() => setShowKey((prev) => !prev)} className="absolute right-3 top-1/2 -translate-y-1/2 rounded-full p-2 text-white/45 transition hover:bg-white/5 hover:text-white">
+            {showKey ? <EyeOff size={14} /> : <Eye size={14} />}
           </button>
         </div>
       </div>
 
-      <div className="flex items-center gap-2 mb-4 cursor-pointer" onClick={() => setForm((f: any) => ({ ...f, isDefault: !f.isDefault }))}>
-        <div className={cn("w-8 h-4 rounded-full p-0.5 transition-colors", form.isDefault ? "bg-nvidia-green" : "bg-[#333]")}>
-          <div className={cn("w-3 h-3 rounded-full bg-white transition-transform", form.isDefault ? "translate-x-4" : "")} />
+      <button
+        onClick={() => setForm((current: any) => ({ ...current, isDefault: !current.isDefault }))}
+        className="mt-5 flex w-full items-center justify-between rounded-2xl border border-white/10 bg-black/20 px-4 py-3 text-left transition hover:border-white/20"
+      >
+        <div>
+          <p className="text-sm font-medium text-white">Use as default model</p>
+          <p className="mt-1 text-xs text-white/45">New chats will automatically start with this endpoint.</p>
         </div>
-        <span className="text-[11px] text-[#888]">Set as default</span>
-      </div>
+        <div className={cn("flex h-7 w-12 items-center rounded-full p-1 transition", form.isDefault ? "bg-[#76b900]" : "bg-white/15")}>
+          <div className={cn("h-5 w-5 rounded-full bg-white transition", form.isDefault ? "translate-x-5" : "translate-x-0")} />
+        </div>
+      </button>
 
-      <div className="flex gap-2 pt-3 border-t border-[#222]">
-        <button onClick={onSave} disabled={!form.name || !form.modelId || !form.baseUrl || saving}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[12px] font-medium bg-nvidia-green text-black hover:bg-nvidia-light disabled:opacity-40 transition-colors">
-          {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />}
-          {isEdit ? "Update" : "Add"}
+      <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-white/10 pt-5">
+        <button
+          onClick={onSave}
+          disabled={!form.name || !form.provider || !form.baseUrl || !form.modelId || saving}
+          className="inline-flex items-center gap-2 rounded-2xl border border-[#76b900]/30 bg-[#76b900] px-4 py-3 text-sm font-medium text-black transition hover:bg-[#8fd80b] disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {saving ? <Spinner size={15} /> : <Check size={15} />}
+          {isEdit ? "Save changes" : "Add model"}
         </button>
-        <button onClick={onCancel} className="px-3 py-1.5 rounded-md text-[12px] text-[#888] hover:text-white hover:bg-[#222] transition-colors">Cancel</button>
+        <button onClick={onCancel} className="inline-flex items-center gap-2 rounded-2xl border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-white/65 transition hover:border-white/20 hover:text-white">
+          Cancel
+        </button>
       </div>
-    </div>
-  );
-}
-
-function Loader2(props: any) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={props.size || 24} height={props.size || 24} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={props.className}>
-      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
-    </svg>
+    </motion.div>
   );
 }
 
 function Field({ label, value, onChange, placeholder, icon }: any) {
   return (
     <div>
-      <label className="block text-[10px] font-mono uppercase tracking-widest text-[#555] mb-1.5">{label}</label>
+      <label className="mb-2 block text-[11px] uppercase tracking-[0.24em] text-white/40">{label}</label>
       <div className="relative">
-        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[#555]">{icon}</span>
-        <input type="text" value={value} onChange={(e: any) => onChange(e.target.value)} placeholder={placeholder}
-          className="w-full bg-[#141414] border border-[#222] rounded-md px-2.5 py-2 pl-8 text-[12px] text-[#d4d4d4] placeholder:text-[#444] focus:outline-none focus:border-nvidia-green/40" />
+        <span className="absolute left-4 top-1/2 -translate-y-1/2 text-[#9ae61a]">{icon}</span>
+        <input
+          type="text"
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          placeholder={placeholder}
+          className="w-full rounded-2xl border border-white/10 bg-black/25 px-11 py-3 text-sm text-white placeholder:text-white/28 focus:border-[#76b900]/35 focus:outline-none"
+        />
       </div>
     </div>
+  );
+}
+
+function Spinner({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="animate-spin">
+      <path d="M21 12a9 9 0 1 1-6.219-8.56" />
+    </svg>
   );
 }
