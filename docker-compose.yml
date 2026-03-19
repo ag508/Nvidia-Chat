@@ -1,11 +1,9 @@
-version: "3.8"
-
 services:
   nvidia-chat:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: nvidia-chat
+    container_name: nvidia-chat-app
     ports:
       - "8090:8090"
     environment:
@@ -13,8 +11,5 @@ services:
       - HOSTNAME=0.0.0.0
       - NODE_ENV=production
     volumes:
-      - chat-data:/app/data
+      - ./data:/app/data
     restart: unless-stopped
-
-volumes:
-  chat-data:
