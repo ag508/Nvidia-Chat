@@ -66,6 +66,13 @@ export function getDb(): Database.Database {
     // column already exists — ignore
   }
 
+  // Migration: add model_name column if it doesn't exist
+  try {
+    db.exec(`ALTER TABLE messages ADD COLUMN model_name TEXT`);
+  } catch {
+    // column already exists — ignore
+  }
+
   // Seed default NVIDIA model if none exist
   const countResult = db.prepare("SELECT COUNT(*) as c FROM models").get() as {
     c: number;

@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
   const db = getDb();
   const rows = db
     .prepare(
-      "SELECT id, conversation_id as conversationId, role, content, reasoning, attachments, created_at as createdAt FROM messages WHERE conversation_id = ? ORDER BY created_at ASC"
+      "SELECT id, conversation_id as conversationId, role, content, reasoning, attachments, model_name as modelName, created_at as createdAt FROM messages WHERE conversation_id = ? ORDER BY created_at ASC"
     )
     .all(conversationId) as any[];
 
@@ -36,8 +36,8 @@ export async function POST(req: NextRequest) {
   const attachmentsJson = body.attachments ? JSON.stringify(body.attachments) : null;
 
   db.prepare(
-    `INSERT INTO messages (id, conversation_id, role, content, reasoning, attachments, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)`
-  ).run(id, body.conversationId, body.role, body.content, body.reasoning || null, attachmentsJson, now);
+    `INSERT INTO messages (id, conversation_id, role, content, reasoning, attachments, model_name, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+  ).run(id, body.conversationId, body.role, body.content, body.reasoning || null, attachmentsJson, body.modelName || null, now);
 
   // Update conversation timestamp and title if first user message
   const msgCount = db
@@ -68,6 +68,25 @@ export async function POST(req: NextRequest) {
     content: body.content,
     reasoning: body.reasoning,
     attachments: body.attachments,
+    modelName: body.modelName || null,
     createdAt: now,
   });
+}
+
+export async function DELETE(req: NextRequest) {
+  const { searchParams } = new URL(req.url);
+  const messageId = searchParams.get("id");
+  const conversationId = searchParams.get("conversationId");
+  if (!messageId || !conversationId)
+    return NextResponse.json({ error: "Missing id or conversationId" }, { status: 400 });
+
+  const db = getDb();
+  // Get the created_at of the target message
+  const target = db.prepare("SELECT created_at FROM messages WHERE id = ?").get(messageId) as { created_at: string } | undefined;
+  if (!target) return NextResponse.json({ error: "Message not found" }, { status: 404 });
+
+  // Delete this message and all messages after it in the same conversation
+  db.prepare("DELETE FROM messages WHERE conversation_id = ? AND created_at >= ?").run(conversationId, target.created_at);
+
+  return NextResponse.json({ ok: true });
 }

@@ -30,6 +30,7 @@ export interface Message {
   content: string;
   reasoning?: string;
   attachments?: MessageAttachment[];
+  modelName?: string;
   createdAt: string;
 }
 
