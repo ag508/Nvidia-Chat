@@ -412,13 +412,13 @@ export default function ChatPage() {
           {!messages.length && !isStreaming ? (
             <div className="flex items-center justify-center h-full">
               <div className="text-center max-w-md">
-                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-2 border border-[#222] text-[11px] font-mono text-nvidia-green mb-6">
-                  <span className="w-1.5 h-1.5 bg-nvidia-green rounded-full animate-pulse" />
+                <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-surface-2 border border-[#222] text-[11px] font-mono text-nvidia-green mb-6 glow-pulse">
+                  <span className="w-1.5 h-1.5 bg-nvidia-green rounded-full" />
                   {selectedModel?.name || "no model"} online
                 </div>
-                <h1 className="text-2xl font-semibold text-white mb-2">nvidia-chat</h1>
-                <p className="text-[#666] text-[13px] leading-relaxed">
-                  Connected to <span className="text-nvidia-green font-mono text-[12px]">{selectedModel?.provider || "—"}</span> endpoint.<br/>
+                <h1 className="text-2xl font-semibold text-white mb-2 welcome-title">nvidia-chat</h1>
+                <p className="text-[#666] text-[13px] leading-relaxed welcome-subtitle">
+                  <span className="terminal-prompt">Connected to <span className="text-nvidia-green font-mono text-[12px]">{selectedModel?.provider || "—"}</span> endpoint.</span><br/>
                   Type a message below to begin.
                 </p>
               </div>
@@ -426,7 +426,7 @@ export default function ChatPage() {
           ) : (
             <div className="max-w-3xl mx-auto py-6 space-y-1">
               {messages.map(msg => (
-                <MessageBubble key={msg.id} message={msg} />
+                <MessageBubble key={msg.id} message={msg} className="message-enter" />
               ))}
 
               {/* searching indicator */}
@@ -465,7 +465,7 @@ export default function ChatPage() {
                   {streamContent ? (
                     <div className="pl-8 markdown-body">
                       <ReactMarkdown components={{ code: CodeBlock }} remarkPlugins={[remarkGfm]}>{streamContent}</ReactMarkdown>
-                      <span className="inline-block w-1.5 h-4 bg-nvidia-green animate-pulse ml-0.5 align-text-bottom rounded-sm" />
+                      <span className="terminal-cursor" />
                     </div>
                   ) : !streamReasoning && !isSearching ? (
                     <div className="pl-8 flex items-center gap-2 text-[#666] text-[12px]">
@@ -515,7 +515,7 @@ export default function ChatPage() {
             )}
 
             {/* input row */}
-            <div className="flex items-end gap-2 bg-surface-2 border border-[#2a2a2a] rounded-lg p-1.5 focus-within:border-nvidia-green/50 transition-colors">
+            <div className="input-container flex items-end gap-2 p-1.5">
               {/* attach */}
               <input ref={fileInputRef} type="file" multiple className="hidden" onChange={handleFileSelect} />
               <button onClick={() => fileInputRef.current?.click()} className="p-2 text-[#555] hover:text-white hover:bg-[#222] rounded-md transition-colors flex-shrink-0" title="Attach files">
@@ -624,7 +624,7 @@ function StreamingThoughts({ reasoning }: { reasoning: string }) {
 }
 
 /* ─── Message Bubble ─── */
-function MessageBubble({ message }: { message: Message }) {
+function MessageBubble({ message, className }: { message: Message; className?: string }) {
   const isUser = message.role === "user";
   const isSystem = message.role === "system";
   const [showThoughts, setShowThoughts] = useState(false);
@@ -656,13 +656,13 @@ function MessageBubble({ message }: { message: Message }) {
   }
 
   return (
-    <div className={cn("py-4", isUser ? "border-b border-[#1a1a1a]" : "")}>
+    <div className={cn("py-4", isUser ? "border-b border-[#1a1a1a]" : "", className)}>
       {/* header */}
       <div className="flex items-center gap-2 mb-2">
         <div className={cn("w-5 h-5 rounded flex items-center justify-center text-[10px] font-bold font-mono flex-shrink-0",
           isUser ? "bg-[#333] text-white" : "bg-nvidia-green text-black"
         )}>
-          {isUser ? "U" : "N"}
+          {isUser ? ">" : "N"}
         </div>
         <span className={cn("text-[12px] font-semibold", isUser ? "text-[#ccc]" : "text-nvidia-green")}>
           {isUser ? "You" : "Assistant"}

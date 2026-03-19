@@ -2,10 +2,10 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "NVIDIA AI Hub",
-  description: "A liquid glass AI experience powered by NVIDIA.",
+  title: "nvidia-chat",
+  description: "Terminal-style AI chat powered by NVIDIA NIM endpoints.",
   icons: {
-    icon: "https://www.nvidia.com/favicon.ico", 
+    icon: "https://www.nvidia.com/favicon.ico",
   }
 };
 
@@ -19,7 +19,7 @@ export default function RootLayout({
       <head>
         <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
       </head>
-      <body className="antialiased min-h-screen selection:backdrop-blur-md">
+      <body className="antialiased min-h-screen">
         {children}
       </body>
     </html>

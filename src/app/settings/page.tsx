@@ -77,7 +77,7 @@ export default function SettingsPage() {
           <div className="w-5 h-5 rounded bg-nvidia-green flex items-center justify-center">
             <span className="text-black font-bold text-[10px] font-mono">N</span>
           </div>
-          <h1 className="text-[14px] font-semibold text-white">Settings</h1>
+          <h1 className="text-[14px] font-semibold text-white font-mono">Settings</h1>
         </div>
       </header>
 
@@ -97,7 +97,7 @@ export default function SettingsPage() {
           {models.map(m => editingId === m.id ? (
             <FormCard key={m.id} form={form} setForm={setForm} onSave={saveModel} onCancel={() => { setEditingId(null); setForm(EMPTY); }} saving={saving} isEdit presets={PRESETS} selProv={form.provider} pickPreset={pickPreset} />
           ) : (
-            <div key={m.id} className="group p-4 bg-surface border border-[#222] hover:border-[#333] rounded-lg transition-colors">
+            <div key={m.id} className="group p-4 bg-surface border border-[#222] hover:border-[#333] rounded-lg transition-colors message-enter">
               <div className="flex items-start justify-between">
                 <div className="flex items-start gap-3 flex-1 min-w-0">
                   <div className={cn("w-8 h-8 rounded flex items-center justify-center flex-shrink-0 text-[13px] font-mono font-bold",
@@ -167,7 +167,7 @@ export default function SettingsPage() {
 function FormCard({ form, setForm, onSave, onCancel, saving, isEdit, presets, selProv, pickPreset }: any) {
   const [showKey, setShowKey] = useState(false);
   return (
-    <div className="p-4 bg-surface-2 border border-nvidia-green/20 rounded-lg">
+    <div className="p-4 bg-surface-2 border border-nvidia-green/20 rounded-lg message-enter">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-[13px] font-semibold text-white">{isEdit ? "Edit model" : "Add model"}</h3>
         <button onClick={onCancel} className="p-1 hover:bg-[#222] rounded text-[#666] hover:text-white"><X size={14} /></button>
