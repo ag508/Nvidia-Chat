@@ -42,6 +42,15 @@ COPY --from=builder /app/.next/static ./.next/static
 RUN mkdir -p /app/public
 COPY --from=builder /app/public ./public
 
+# ── Ensure better-sqlite3 native addon is present ──
+# The standalone output may not include the compiled .node binary,
+# so we copy the full better-sqlite3 module from the builder stage.
+COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
+COPY --from=builder /app/node_modules/bindings ./node_modules/bindings
+COPY --from=builder /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
+COPY --from=builder /app/node_modules/prebuild-install ./node_modules/prebuild-install
+COPY --from=builder /app/node_modules/node-addon-api ./node_modules/node-addon-api
+
 # Create the data directory for SQLite and give ownership to nextjs user
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
 

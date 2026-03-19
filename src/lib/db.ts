@@ -17,7 +17,14 @@ export function getDb(): Database.Database {
   if (db) return db;
 
   ensureDir();
-  db = new Database(DB_PATH);
+  console.log(`[DB] Opening SQLite database at: ${DB_PATH}`);
+  try {
+    db = new Database(DB_PATH);
+  } catch (err: any) {
+    console.error(`[DB] Failed to open database at ${DB_PATH}:`, err.message);
+    console.error(`[DB] CWD: ${process.cwd()}, dir exists: ${fs.existsSync(path.dirname(DB_PATH))}`);
+    throw err;
+  }
 
   // Enable WAL mode for better concurrent performance
   db.pragma("journal_mode = WAL");
