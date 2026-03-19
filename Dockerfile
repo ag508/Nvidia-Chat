@@ -35,9 +35,12 @@ RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
 # Copy the built app (standalone output includes node_modules needed at runtime)
-COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
+
+# Copy public assets (directory may be nearly empty but must exist)
+RUN mkdir -p /app/public
+COPY --from=builder /app/public ./public
 
 # Create the data directory for SQLite and give ownership to nextjs user
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
