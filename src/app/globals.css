@@ -1,0 +1,192 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg: #0c0c0c;
+  --surface: #141414;
+  --surface-2: #1a1a1a;
+  --border: #222;
+  --border-hover: #333;
+  --text: #d4d4d4;
+  --text-dim: #888;
+  --text-muted: #555;
+  --accent: #76B900;
+  --accent-dim: #5a8f00;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html { color-scheme: dark; font-size: 14px; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: "Inter", system-ui, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #555; }
+
+/* Markdown */
+.markdown-body {
+  font-size: 0.875rem;
+  line-height: 1.75;
+  color: var(--text);
+  word-break: break-word;
+}
+.markdown-body p { margin-bottom: 0.75em; }
+.markdown-body p:last-child { margin-bottom: 0; }
+.markdown-body strong { color: #fff; font-weight: 600; }
+.markdown-body em { color: #bbb; }
+
+.markdown-body code:not(pre code) {
+  background: rgba(118,185,0,0.1);
+  border: 1px solid rgba(118,185,0,0.2);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.8em;
+  color: #a3d944;
+}
+
+.markdown-body pre {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  overflow: visible;
+}
+
+.markdown-body pre code {
+  background: transparent;
+  border: none;
+  color: inherit;
+  padding: 0;
+}
+
+.markdown-body a { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
+.markdown-body a:hover { color: #8FE800; }
+
+.markdown-body ul, .markdown-body ol { padding-left: 1.25em; margin-bottom: 0.75em; }
+.markdown-body li { margin-bottom: 0.25em; }
+.markdown-body li::marker { color: var(--text-muted); }
+
+.markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 {
+  font-weight: 600;
+  margin-top: 1.25em;
+  margin-bottom: 0.5em;
+  color: #fff;
+}
+.markdown-body h1 { font-size: 1.25em; }
+.markdown-body h2 { font-size: 1.1em; }
+.markdown-body h3 { font-size: 1em; }
+
+.markdown-body blockquote {
+  border-left: 2px solid var(--accent);
+  padding-left: 0.75em;
+  color: var(--text-dim);
+  margin: 0.75em 0;
+}
+
+.markdown-body table { border-collapse: collapse; width: 100%; margin: 0.75em 0; font-size: 0.85em; }
+.markdown-body th, .markdown-body td { border: 1px solid var(--border); padding: 0.4em 0.6em; text-align: left; }
+.markdown-body th { background: var(--surface); font-weight: 600; color: #fff; }
+
+/* File chip */
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.75rem;
+  color: var(--text-dim);
+  max-width: 200px;
+}
+.file-chip span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* ─── Mobile sidebar overlay ─── */
+.sidebar-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 35;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+/* ─── Mobile responsive ─── */
+@media (max-width: 768px) {
+  html { font-size: 15px; }
+
+  /* Sidebar becomes fixed overlay on mobile */
+  .mobile-sidebar {
+    position: fixed !important;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 40;
+    width: 280px !important;
+    box-shadow: 8px 0 32px rgba(0,0,0,0.5);
+  }
+
+  .mobile-sidebar-closed {
+    width: 0 !important;
+    overflow: hidden;
+  }
+
+  /* Bottom dock: safe area for phones with home indicator */
+  .bottom-dock {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+
+  /* Message images scale to fit screen */
+  .msg-image {
+    max-width: 85vw !important;
+    max-height: 200px !important;
+  }
+
+  /* Attachment thumbnails */
+  .attach-thumb {
+    height: 64px !important;
+    max-width: 100px !important;
+  }
+
+  /* Model picker popup */
+  .model-picker-popup {
+    width: calc(100vw - 2rem) !important;
+    max-width: 320px;
+    left: 0 !important;
+  }
+
+  /* Tables scroll horizontally */
+  .markdown-body table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Larger tap targets */
+  button { min-height: 36px; min-width: 36px; }
+  .sidebar-btn { min-height: 40px; }
+}
+
+/* Small phone (< 380px) */
+@media (max-width: 380px) {
+  .mobile-sidebar {
+    width: 100vw !important;
+  }
+}

@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Build output
+.next/
+
+# Database (runtime only)
+data/
+
+# Git
+.git/
+.gitignore
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Misc
+*.md
+.env*
+npm-debug.log*
