@@ -64,15 +64,22 @@ const MAX_PDF_PAGES_AS_IMAGES = 10;
 let pdfjsWorkerConfigured = false;
 async function configurePdfjsWorker(pdfjs: any) {
   if (pdfjsWorkerConfigured) return;
+  pdfjsWorkerConfigured = true;
   try {
-    const { createRequire } = await import("module");
-    const req = createRequire(import.meta.url);
-    const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    if (pdfjs?.GlobalWorkerOptions?.workerSrc) return; // already set
+    const path = await import("path");
     const { pathToFileURL } = await import("url");
+    const workerPath = path.join(
+      process.cwd(),
+      "node_modules",
+      "pdfjs-dist",
+      "legacy",
+      "build",
+      "pdf.worker.mjs"
+    );
     pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
-    pdfjsWorkerConfigured = true;
-  } catch (e) {
-    console.warn("[/api/extract] failed to resolve pdfjs worker:", e);
+  } catch {
+    // pdfjs falls back to its own resolution — non-fatal
   }
 }
 
