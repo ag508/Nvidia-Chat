@@ -472,7 +472,6 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
   // On mobile, browsers don't render data-URI PDFs in iframes — fetch rasterized pages.
   useEffect(() => {
     if (kind !== "pdf" || !isMobile) return;
-    if (pdfImagesStatus !== "idle") return;
     let cancelled = false;
     setPdfImagesStatus("loading");
     (async () => {
@@ -492,7 +491,7 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
       }
     })();
     return () => { cancelled = true; };
-  }, [kind, isMobile, att, pdfImagesStatus]);
+  }, [kind, isMobile, att]);
 
   return (
     <div
