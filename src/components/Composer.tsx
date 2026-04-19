@@ -34,9 +34,15 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (!ta.current) return;
-    ta.current.style.height = "auto";
-    ta.current.style.height = Math.min(ta.current.scrollHeight, 180) + "px";
+    const el = ta.current;
+    if (!el) return;
+    if (!value) {
+      // Empty → lock to single-line height; skip scrollHeight (which can over-report on mobile).
+      el.style.height = "44px";
+      return;
+    }
+    el.style.height = "auto";
+    el.style.height = Math.min(el.scrollHeight, 180) + "px";
   }, [value]);
 
   const hasAtts = attachments.length > 0;
@@ -149,8 +155,9 @@ export function Composer({
               fontFamily: "inherit",
               fontSize: 16, // 16px prevents iOS zoom-on-focus
               padding: "10px 4px",
-              lineHeight: 1.5,
-              minHeight: 24,
+              lineHeight: "24px",
+              height: 44,
+              minHeight: 44,
               maxHeight: 180,
               minWidth: 0,
               width: "100%",

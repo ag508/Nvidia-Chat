@@ -431,8 +431,21 @@ function dataUriToBlob(dataUri: string): Blob | null {
 function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: () => void }) {
   const kind = canPreviewInline(att);
   const [extracted, setExtracted] = useState<string>("");
-  const [extractStatus, setExtractStatus] = useState<"idle" | "loading" | "error" | "done">(kind === "extract" ? "loading" : "idle");
+  const [extractStatus, setExtractStatus] = useState<"idle" | "loading" | "error" | "done">(
+    kind === "extract" ? "loading" : "idle"
+  );
+  const [pdfImages, setPdfImages] = useState<string[] | null>(null);
+  const [pdfImagesStatus, setPdfImagesStatus] = useState<"idle" | "loading" | "error" | "done">("idle");
+  const [isMobile, setIsMobile] = useState(false);
   const textBody = kind === "text" ? decodeTextFromDataUri(att.data) : "";
+
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 820px)");
+    setIsMobile(mq.matches);
+    const h = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", h);
+    return () => mq.removeEventListener("change", h);
+  }, []);
 
   useEffect(() => {
     if (kind !== "extract") return;
@@ -455,6 +468,31 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
     })();
     return () => { cancelled = true; };
   }, [att, kind]);
+
+  // On mobile, browsers don't render data-URI PDFs in iframes — fetch rasterized pages.
+  useEffect(() => {
+    if (kind !== "pdf" || !isMobile) return;
+    if (pdfImagesStatus !== "idle") return;
+    let cancelled = false;
+    setPdfImagesStatus("loading");
+    (async () => {
+      try {
+        const blob = dataUriToBlob(att.data);
+        if (!blob) { if (!cancelled) setPdfImagesStatus("error"); return; }
+        const fd = new FormData();
+        fd.append("file", new File([blob], att.name, { type: att.type || "application/pdf" }));
+        const r = await fetch("/api/extract", { method: "POST", body: fd });
+        if (!r.ok) { if (!cancelled) setPdfImagesStatus("error"); return; }
+        const j = await r.json();
+        if (cancelled) return;
+        setPdfImages(Array.isArray(j.images) ? j.images : []);
+        setPdfImagesStatus("done");
+      } catch {
+        if (!cancelled) setPdfImagesStatus("error");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [kind, isMobile, att, pdfImagesStatus]);
 
   return (
     <div
@@ -492,12 +530,46 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
         </div>
         <div className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--canvas)" }}>
           {kind === "pdf" ? (
-            <iframe
-              src={att.data}
-              title={att.name}
-              className="w-full h-full"
-              style={{ border: "none", background: "#fff" }}
-            />
+            isMobile ? (
+              pdfImagesStatus === "loading" || pdfImagesStatus === "idle" ? (
+                <div className="h-full grid place-items-center">
+                  <div className="flex items-center gap-2 mono text-[13px]" style={{ color: "var(--text-dim)" }}>
+                    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)", animation: "nv-blink 1s steps(1) infinite" }} />
+                    Rendering PDF…
+                  </div>
+                </div>
+              ) : pdfImagesStatus === "error" || !pdfImages?.length ? (
+                <div className="h-full grid place-items-center p-8 text-center">
+                  <div>
+                    <p className="text-[14px] mb-3" style={{ color: "var(--text-dim)" }}>Could not render preview.</p>
+                    <a href={att.data} download={att.name}
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-medium"
+                      style={{ background: "var(--accent)", color: "var(--accent-ink)", textDecoration: "none" }}>
+                      <Download size={13} /> Download
+                    </a>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3 p-3" style={{ background: "#2a2a2a" }}>
+                  {pdfImages.map((src, i) => (
+                    <img
+                      key={i}
+                      src={src}
+                      alt={`Page ${i + 1}`}
+                      className="w-full h-auto rounded-md"
+                      style={{ background: "#fff", display: "block" }}
+                    />
+                  ))}
+                </div>
+              )
+            ) : (
+              <iframe
+                src={att.data}
+                title={att.name}
+                className="w-full h-full"
+                style={{ border: "none", background: "#fff" }}
+              />
+            )
           ) : kind === "text" ? (
             <pre
               className="p-4 text-[12.5px] mono whitespace-pre-wrap break-words"
