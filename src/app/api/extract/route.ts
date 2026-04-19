@@ -83,7 +83,7 @@ async function configurePdfjsWorker(pdfjs: any) {
   }
 }
 
-async function rasterizePdf(buf: Buffer): Promise<string[]> {
+async function rasterizePdf(buf: Buffer, preview = false): Promise<string[]> {
   try {
     const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
     await configurePdfjsWorker(pdfjs);
@@ -99,17 +99,17 @@ async function rasterizePdf(buf: Buffer): Promise<string[]> {
     const pageCount = Math.min(pdf.numPages, MAX_PDF_PAGES_AS_IMAGES);
     const out: string[] = [];
 
-    // Target ~1600px on the long side — same ballpark Claude/ChatGPT use.
-    // JPEG @ ~0.85 is dramatically smaller than PNG and stays well under
-    // typical provider per-request size limits.
-    const TARGET_LONG_EDGE = 1600;
-    const JPEG_QUALITY = 0.85;
+    // LLM mode: ~1600px / q0.85 (compact for request size).
+    // Preview mode: ~2600px / q0.92 — sharp enough for zooming on mobile.
+    const TARGET_LONG_EDGE = preview ? 2600 : 1600;
+    const JPEG_QUALITY = preview ? 0.92 : 0.85;
+    const SCALE_CAP = preview ? 3.5 : 2.0;
 
     for (let i = 1; i <= pageCount; i++) {
       const page = await pdf.getPage(i);
       const base = page.getViewport({ scale: 1.0 });
       const longest = Math.max(base.width, base.height);
-      const scale = Math.min(2.0, TARGET_LONG_EDGE / longest);
+      const scale = Math.min(SCALE_CAP, TARGET_LONG_EDGE / longest);
       const viewport = page.getViewport({ scale });
       const canvas = createCanvas(Math.ceil(viewport.width), Math.ceil(viewport.height));
       const ctx = canvas.getContext("2d") as any;
@@ -119,7 +119,7 @@ async function rasterizePdf(buf: Buffer): Promise<string[]> {
       const jpg = canvas.toBuffer("image/jpeg", JPEG_QUALITY);
       const b64 = jpg.toString("base64");
       out.push(`data:image/jpeg;base64,${b64}`);
-      console.log(`[/api/extract] page ${i}: ${canvas.width}x${canvas.height}, ${Math.round(jpg.length / 1024)}KB`);
+      console.log(`[/api/extract] ${preview ? "preview " : ""}page ${i}: ${canvas.width}x${canvas.height}, ${Math.round(jpg.length / 1024)}KB`);
       page.cleanup();
     }
     await pdf.cleanup();
@@ -175,6 +175,8 @@ function extensionOf(name: string): string {
 
 export async function POST(req: NextRequest) {
   try {
+    const url = new URL(req.url);
+    const preview = url.searchParams.get("preview") === "1";
     const form = await req.formData();
     const file = form.get("file");
     if (!(file instanceof File)) {
@@ -204,8 +206,8 @@ export async function POST(req: NextRequest) {
     let images: string[] = [];
 
     if (type === "application/pdf" || ext === "pdf") {
-      raw = await extractPdf(buf);
-      images = await rasterizePdf(buf);
+      raw = preview ? "" : await extractPdf(buf);
+      images = await rasterizePdf(buf, preview);
     } else if (
       ext === "docx" ||
       type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document"

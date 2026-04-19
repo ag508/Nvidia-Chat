@@ -480,7 +480,7 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
         if (!blob) { if (!cancelled) setPdfImagesStatus("error"); return; }
         const fd = new FormData();
         fd.append("file", new File([blob], att.name, { type: att.type || "application/pdf" }));
-        const r = await fetch("/api/extract", { method: "POST", body: fd });
+        const r = await fetch("/api/extract?preview=1", { method: "POST", body: fd });
         if (!r.ok) { if (!cancelled) setPdfImagesStatus("error"); return; }
         const j = await r.json();
         if (cancelled) return;
