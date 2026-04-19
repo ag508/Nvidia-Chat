@@ -61,9 +61,25 @@ async function extractPdf(buf: Buffer): Promise<string> {
 
 const MAX_PDF_PAGES_AS_IMAGES = 10;
 
+let pdfjsWorkerConfigured = false;
+async function configurePdfjsWorker(pdfjs: any) {
+  if (pdfjsWorkerConfigured) return;
+  try {
+    const { createRequire } = await import("module");
+    const req = createRequire(import.meta.url);
+    const workerPath = req.resolve("pdfjs-dist/legacy/build/pdf.worker.mjs");
+    const { pathToFileURL } = await import("url");
+    pdfjs.GlobalWorkerOptions.workerSrc = pathToFileURL(workerPath).href;
+    pdfjsWorkerConfigured = true;
+  } catch (e) {
+    console.warn("[/api/extract] failed to resolve pdfjs worker:", e);
+  }
+}
+
 async function rasterizePdf(buf: Buffer): Promise<string[]> {
   try {
     const pdfjs: any = await import("pdfjs-dist/legacy/build/pdf.mjs");
+    await configurePdfjsWorker(pdfjs);
     const { createCanvas } = await import("@napi-rs/canvas");
 
     const loadingTask = pdfjs.getDocument({

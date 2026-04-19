@@ -42,13 +42,14 @@ COPY --from=builder /app/.next/static ./.next/static
 RUN mkdir -p /app/public
 COPY --from=builder /app/public ./public
 
-# ── Ensure better-sqlite3 native addon is present ──
-# The standalone output may not include the compiled .node binary,
-# so we copy the full better-sqlite3 module from the builder stage.
-# Only runtime deps are needed: better-sqlite3, bindings, file-uri-to-path
-COPY --from=builder /app/node_modules/better-sqlite3 ./node_modules/better-sqlite3
-COPY --from=builder /app/node_modules/bindings ./node_modules/bindings
-COPY --from=builder /app/node_modules/file-uri-to-path ./node_modules/file-uri-to-path
+# ── Runtime-required modules that Next.js standalone doesn't bundle ──
+# better-sqlite3 is a native addon. The attachment-extraction deps
+# (pdf-parse/pdf-lib/pdfjs-dist/@napi-rs/canvas/mammoth/xlsx/jszip) are
+# externalized from the bundle and dynamically imported at runtime, so we
+# need their full module trees (including transitive deps) on the image.
+# Copying the whole node_modules is the simplest way to guarantee all
+# transitive requires resolve.
+COPY --from=builder /app/node_modules ./node_modules
 
 # Create the data directory for SQLite and give ownership to nextjs user
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
