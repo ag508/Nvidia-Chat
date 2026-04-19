@@ -2,7 +2,6 @@
 FROM node:20-alpine AS deps
 WORKDIR /app
 
-# Native modules need build tools to compile
 RUN apk add --no-cache python3 make g++
 
 COPY package.json package-lock.json ./
@@ -17,26 +16,27 @@ RUN apk add --no-cache python3 make g++
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 
-# Rebuild better-sqlite3 for the Alpine/Linux target used by the runtime
 RUN npm rebuild better-sqlite3
-
 RUN npm run build
 
-# ── Stage 3: Production-only dependency tree ──
-# Reinstall with --omit=dev so typescript, @types/*, tailwind, postcss, etc.
-# never reach the runtime image. Also strip non-musl prebuilt binaries that
-# @napi-rs/canvas ships for other platforms (darwin/win32/linux-gnu/android).
+# ── Stage 3: Minimal runtime dependencies ──
+# Next.js standalone already bundles react/next/openai/markdown/etc. into
+# .next/standalone/node_modules. The ONLY modules standalone doesn't bundle
+# are the ones we externalized (native addons + dynamic-import consumers).
+# So we install ONLY those here — not the full production tree.
 FROM node:20-alpine AS prod-deps
 WORKDIR /app
 
 RUN apk add --no-cache python3 make g++
 
+# Hand-written minimal package.json — pin the same versions as the lockfile.
+# Anything not listed here is assumed to be bundled into the standalone output.
 COPY package.json package-lock.json ./
-RUN npm ci --omit=dev && npm rebuild better-sqlite3
+RUN node -e "const p=require('./package.json');const keep=['better-sqlite3','pdf-parse','pdf-lib','pdfjs-dist','@napi-rs/canvas','mammoth','xlsx','jszip'];const d={};for(const k of keep)d[k]=p.dependencies[k];require('fs').writeFileSync('package.json',JSON.stringify({name:'runtime',version:'1.0.0',dependencies:d},null,2));require('fs').rmSync('package-lock.json');"
+RUN npm install --omit=dev --no-audit --no-fund && npm rebuild better-sqlite3
 
-# Prune platform-specific @napi-rs/canvas packages we don't need on Alpine
-# (keep only linux-*-musl variants). Also drop pdfjs-dist's non-legacy build,
-# cmap/font sources we don't ship, and test/type files.
+# Aggressive prune: kill docs, tests, sourcemaps, type decls, non-legacy pdfjs
+# builds, pdf-parse test PDFs, and non-musl @napi-rs prebuilds.
 RUN set -eux; \
     for d in node_modules/@napi-rs/canvas-*; do \
       case "$d" in \
@@ -47,9 +47,14 @@ RUN set -eux; \
     rm -rf node_modules/pdfjs-dist/build \
            node_modules/pdfjs-dist/lib \
            node_modules/pdfjs-dist/types \
-           node_modules/pdfjs-dist/web; \
-    find node_modules -type d \( -name test -o -name tests -o -name __tests__ -o -name docs -o -name example -o -name examples \) -prune -exec rm -rf {} + ; \
-    find node_modules -type f \( -name "*.md" -o -name "*.ts" -o -name "*.map" -o -name "LICENSE*" -o -name "CHANGELOG*" \) -delete ; \
+           node_modules/pdfjs-dist/web \
+           node_modules/pdfjs-dist/image_decoders \
+           node_modules/pdf-parse/test \
+           node_modules/xlsx/types \
+           node_modules/xlsx/docbits \
+           node_modules/xlsx/misc ; \
+    find node_modules -type d \( -name test -o -name tests -o -name __tests__ -o -name docs -o -name doc -o -name example -o -name examples -o -name ".github" -o -name "coverage" -o -name "benchmark" -o -name "benchmarks" \) -prune -exec rm -rf {} + ; \
+    find node_modules -type f \( -name "*.md" -o -name "*.markdown" -o -name "*.map" -o -name "LICENSE*" -o -name "CHANGELOG*" -o -name "HISTORY*" -o -name "AUTHORS*" -o -name "CONTRIBUTORS*" -o -name ".npmignore" -o -name ".eslintrc*" -o -name ".prettierrc*" -o -name "tsconfig*.json" -o -name "*.ts" ! -name "*.d.ts" \) -delete ; \
     find node_modules -type f -name "*.d.ts" -delete
 
 # ── Stage 4: Production image ──
@@ -62,15 +67,14 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 
-# Next.js standalone output (includes a minimal node_modules for the bundle)
+# Standalone output — self-contained Next.js server with its own node_modules
 COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 
 RUN mkdir -p /app/public
 COPY --from=builder /app/public ./public
 
-# Runtime-required modules that Next.js externalizes (native + dynamic imports).
-# Pulled from the slim prod-deps stage, not the full builder tree.
+# Merge the minimal externalized modules into the standalone node_modules tree
 COPY --from=prod-deps /app/node_modules ./node_modules
 
 RUN mkdir -p /app/data && chown -R nextjs:nodejs /app/data
