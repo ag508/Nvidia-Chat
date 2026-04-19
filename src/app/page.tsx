@@ -306,14 +306,27 @@ export default function ChatPage() {
       }
     }
 
-    const userMsg = await fetch("/api/messages", {
+    // Optimistic bubble — render immediately, reconcile with server-assigned id later.
+    const optimisticId = "tmp-" + Date.now();
+    const optimisticMsg: Message = {
+      id: optimisticId,
+      conversationId: convId,
+      role: "user",
+      content: displayContent,
+      attachments: savedAttachments,
+      createdAt: new Date().toISOString(),
+    };
+    setMessages(p => [...p, optimisticMsg]);
+    setIsStreaming(true);
+
+    fetch("/api/messages", {
       method: "POST", headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ conversationId: convId, role: "user", content: displayContent, attachments: savedAttachments }),
-    }).then(r => r.json());
-
-    setMessages(p => [...p, userMsg]);
+    })
+      .then(r => r.json())
+      .then(saved => setMessages(p => p.map(m => m.id === optimisticId ? saved : m)))
+      .catch(() => {});
     fetchConversations();
-    setIsStreaming(true);
     streamContentRef.current = "";
     streamReasoningRef.current = "";
     setStreamContent(""); setStreamReasoning("");

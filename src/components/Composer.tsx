@@ -57,7 +57,7 @@ export function Composer({
       }}
     >
       <div
-        className="mx-auto pointer-events-auto transition-all"
+        className="mx-auto pointer-events-auto transition-all w-full"
         style={{
           maxWidth: 780,
           background: "var(--panel)",
@@ -69,6 +69,7 @@ export function Composer({
           flexDirection: hasAtts ? "column" : "row",
           alignItems: hasAtts ? "stretch" : "center",
           gap: 6,
+          minWidth: 0,
         }}
       >
         {hasAtts && (
@@ -114,7 +115,7 @@ export function Composer({
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 w-full">
+        <div className="flex items-center gap-1.5 w-full" style={{ minWidth: 0 }}>
           <input
             ref={fileRef}
             type="file"
@@ -146,11 +147,13 @@ export function Composer({
             style={{
               color: "var(--text)",
               fontFamily: "inherit",
-              fontSize: 14,
+              fontSize: 16, // 16px prevents iOS zoom-on-focus
               padding: "10px 4px",
               lineHeight: 1.5,
               minHeight: 24,
               maxHeight: 180,
+              minWidth: 0,
+              width: "100%",
             }}
           />
 

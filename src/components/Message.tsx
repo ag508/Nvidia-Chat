@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   ChevronRight, Brain, Copy, Check, RotateCcw, ThumbsUp, ThumbsDown,
   Pencil, Send, FileText, Globe, Download, FileSpreadsheet,
@@ -393,7 +393,7 @@ function decodeTextFromDataUri(dataUri: string): string {
   }
 }
 
-function canPreviewInline(att: MessageAttachment): "pdf" | "text" | "none" {
+function canPreviewInline(att: MessageAttachment): "pdf" | "text" | "extract" | "none" {
   const t = att.type.toLowerCase();
   const ext = att.name.split(".").pop()?.toLowerCase() || "";
   if (t === "application/pdf" || ext === "pdf") return "pdf";
@@ -404,12 +404,58 @@ function canPreviewInline(att: MessageAttachment): "pdf" | "text" | "none" {
     "ini", "conf", "env",
   ];
   if (t.startsWith("text/") || t === "application/json" || t === "application/xml" || textExts.includes(ext)) return "text";
+  const extractExts = ["docx", "xlsx", "xls", "pptx"];
+  if (extractExts.includes(ext) || t.includes("word") || t.includes("spreadsheet") || t.includes("presentation")) return "extract";
   return "none";
+}
+
+function dataUriToBlob(dataUri: string): Blob | null {
+  const m = /^data:([^;,]+)?(;base64)?,([\s\S]*)$/.exec(dataUri);
+  if (!m) return null;
+  const mime = m[1] || "application/octet-stream";
+  const isB64 = !!m[2];
+  const body = m[3] || "";
+  try {
+    if (isB64) {
+      const bin = atob(body);
+      const arr = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+      return new Blob([arr], { type: mime });
+    }
+    return new Blob([decodeURIComponent(body)], { type: mime });
+  } catch {
+    return null;
+  }
 }
 
 function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: () => void }) {
   const kind = canPreviewInline(att);
+  const [extracted, setExtracted] = useState<string>("");
+  const [extractStatus, setExtractStatus] = useState<"idle" | "loading" | "error" | "done">(kind === "extract" ? "loading" : "idle");
   const textBody = kind === "text" ? decodeTextFromDataUri(att.data) : "";
+
+  useEffect(() => {
+    if (kind !== "extract") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const blob = dataUriToBlob(att.data);
+        if (!blob) { if (!cancelled) setExtractStatus("error"); return; }
+        const fd = new FormData();
+        fd.append("file", new File([blob], att.name, { type: att.type }));
+        const r = await fetch("/api/extract", { method: "POST", body: fd });
+        if (!r.ok) { if (!cancelled) setExtractStatus("error"); return; }
+        const j = await r.json();
+        if (cancelled) return;
+        setExtracted(j.text || "");
+        setExtractStatus("done");
+      } catch {
+        if (!cancelled) setExtractStatus("error");
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [att, kind]);
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center p-4"
@@ -459,6 +505,33 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
             >
               {textBody}
             </pre>
+          ) : kind === "extract" ? (
+            extractStatus === "loading" ? (
+              <div className="h-full grid place-items-center">
+                <div className="flex items-center gap-2 mono text-[13px]" style={{ color: "var(--text-dim)" }}>
+                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)", animation: "nv-blink 1s steps(1) infinite" }} />
+                  Extracting preview…
+                </div>
+              </div>
+            ) : extractStatus === "error" ? (
+              <div className="h-full grid place-items-center p-8 text-center">
+                <div>
+                  <p className="text-[14px] mb-3" style={{ color: "var(--text-dim)" }}>Preview failed to load.</p>
+                  <a href={att.data} download={att.name}
+                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-medium"
+                    style={{ background: "var(--accent)", color: "var(--accent-ink)", textDecoration: "none" }}>
+                    <Download size={13} /> Download
+                  </a>
+                </div>
+              </div>
+            ) : (
+              <pre
+                className="p-4 text-[12.5px] mono whitespace-pre-wrap break-words"
+                style={{ color: "var(--text)", margin: 0 }}
+              >
+                {extracted || "(no extractable content)"}
+              </pre>
+            )
           ) : (
             <div className="h-full grid place-items-center p-8 text-center">
               <div>
