@@ -64,6 +64,11 @@ WORKDIR /app
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 
+# ── Web search (Tavily) ──
+# Baked default so the image is portable to any host without extra config.
+# Override at run-time with `-e TAVILY_API_KEY=...` or via compose.
+ENV TAVILY_API_KEY=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
+
 RUN addgroup --system --gid 1001 nodejs && \
     adduser --system --uid 1001 nextjs
 

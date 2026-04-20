@@ -3,12 +3,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ChevronRight, Brain, Copy, Check, RotateCcw, ThumbsUp, ThumbsDown,
-  Pencil, Send, FileText, Globe, Download, FileSpreadsheet,
-  Presentation, FileCode, File as FileIcon, X,
+  Pencil, ArrowUp, FileText, Globe, Download, FileSpreadsheet,
+  Presentation, FileCode, File as FileIcon,
 } from "lucide-react";
+import { motion, AnimatePresence } from "motion/react";
 import { Message as Msg, MessageAttachment } from "@/lib/types";
-import { cn } from "@/lib/utils";
 import { MarkdownContent } from "./MarkdownContent";
+import { Dialog, DialogContent } from "@/components/ui/Dialog";
+import { TooltipProvider } from "@/components/ui/Tooltip";
 
 export function parseThinkTags(content: string): { thinking: string; cleaned: string } {
   const thinkMatch = content.match(/<think>([\s\S]*?)<\/think>/);
@@ -20,66 +22,112 @@ export function parseThinkTags(content: string): { thinking: string; cleaned: st
   return { thinking: "", cleaned: content };
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Reasoning · collapsible glass panel
+   ══════════════════════════════════════════════════════════════ */
 function Reasoning({ text }: { text: string }) {
   const [open, setOpen] = useState(false);
   if (!text) return null;
   return (
     <div
-      className="mb-3 rounded-[10px] overflow-hidden"
-      style={{ border: "1px solid var(--border)", background: "var(--card)" }}
+      className="mb-3 overflow-hidden"
+      style={{
+        borderRadius: 14,
+        background: "var(--glass-soft)",
+        border: "1px solid var(--hairline)",
+      }}
     >
-      <div
+      <button
+        type="button"
         onClick={() => setOpen(v => !v)}
-        className="flex items-center gap-2 px-3 py-2.5 cursor-pointer text-[12px]"
-        style={{ color: "var(--text-dim)" }}
+        className="w-full flex items-center gap-2 px-3 py-2.5 cursor-pointer text-[12px] nv-ring"
+        style={{ color: "var(--text-dim)", background: "none", border: "none", fontFamily: "inherit" }}
       >
-        <ChevronRight
-          size={11}
-          style={{
-            transform: open ? "rotate(90deg)" : "rotate(0deg)",
-            transition: "transform .2s",
-            color: "var(--text-mute)",
-          }}
-        />
-        <Brain size={12} />
-        <span>Reasoning</span>
-        <span className="ml-auto" style={{ color: "var(--text-mute)" }}>{open ? "hide" : "show"}</span>
-      </div>
-      {open && (
-        <div
-          className="px-3.5 pb-3 text-[12.5px] leading-relaxed whitespace-pre-wrap break-words"
-          style={{
-            color: "var(--text-dim)",
-            borderTop: "1px dashed var(--border)",
-            paddingTop: 10,
-            maxHeight: 400,
-            overflowY: "auto",
-          }}
+        <motion.span
+          animate={{ rotate: open ? 90 : 0 }}
+          transition={{ type: "spring", stiffness: 420, damping: 28 }}
+          className="inline-flex"
+          style={{ color: "var(--text-mute)" }}
         >
-          {text}
-        </div>
-      )}
+          <ChevronRight size={11} />
+        </motion.span>
+        <Brain size={12} style={{ color: "var(--accent)", opacity: 0.8 }} />
+        <span className="font-medium tracking-[0.02em]">Reasoning</span>
+        <span
+          className="ml-auto mono text-[10px] tracking-wide"
+          style={{ color: "var(--text-mute)" }}
+        >
+          {open ? "hide" : "show"}
+        </span>
+      </button>
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ type: "spring", stiffness: 240, damping: 32 }}
+            className="overflow-hidden"
+          >
+            <div
+              className="px-4 pb-3.5 pt-2 text-[12.5px] leading-relaxed whitespace-pre-wrap break-words"
+              style={{
+                color: "var(--text-dim)",
+                borderTop: "1px dashed var(--hairline)",
+                paddingTop: 10,
+                maxHeight: 400,
+                overflowY: "auto",
+              }}
+            >
+              {text}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
 
-function MessageActions({ content, onRegenerate }: { content: string; onRegenerate?: () => void }) {
+/* ══════════════════════════════════════════════════════════════
+   Action bar under assistant messages
+   ══════════════════════════════════════════════════════════════ */
+function MessageActions({
+  content,
+  onRegenerate,
+}: {
+  content: string;
+  onRegenerate?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   const [feedback, setFeedback] = useState<"up" | "down" | null>(null);
   return (
-    <div className="flex gap-[2px] mt-3 opacity-0 group-hover/msg:opacity-100 transition-opacity">
-      <ActionBtn onClick={() => { navigator.clipboard.writeText(content); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
-        {copied ? <Check size={11} /> : <Copy size={11} />} {copied ? "Copied" : "Copy"}
+    <div className="flex gap-1 mt-3 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+      <ActionBtn
+        onClick={() => {
+          navigator.clipboard.writeText(content);
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        }}
+      >
+        {copied ? <Check size={11} /> : <Copy size={11} />}{" "}
+        {copied ? "copied" : "copy"}
       </ActionBtn>
       {onRegenerate && (
         <ActionBtn onClick={onRegenerate}>
-          <RotateCcw size={11} /> Regenerate
+          <RotateCcw size={11} /> regenerate
         </ActionBtn>
       )}
-      <ActionBtn onClick={() => setFeedback(feedback === "up" ? null : "up")} active={feedback === "up"}>
+      <ActionBtn
+        onClick={() => setFeedback(feedback === "up" ? null : "up")}
+        active={feedback === "up"}
+      >
         <ThumbsUp size={11} />
       </ActionBtn>
-      <ActionBtn onClick={() => setFeedback(feedback === "down" ? null : "down")} active={feedback === "down"}>
+      <ActionBtn
+        onClick={() => setFeedback(feedback === "down" ? null : "down")}
+        active={feedback === "down"}
+      >
         <ThumbsDown size={11} />
       </ActionBtn>
     </div>
@@ -87,21 +135,34 @@ function MessageActions({ content, onRegenerate }: { content: string; onRegenera
 }
 
 function ActionBtn({
-  children, onClick, active,
-}: { children: React.ReactNode; onClick?: () => void; active?: boolean }) {
+  children,
+  onClick,
+  active,
+}: {
+  children: React.ReactNode;
+  onClick?: () => void;
+  active?: boolean;
+}) {
   return (
     <button
+      type="button"
       onClick={onClick}
-      className="flex items-center gap-[5px] px-2 py-[5px] rounded-md text-[11px] cursor-pointer transition-colors"
+      className="flex items-center gap-[5px] px-2 py-[5px] rounded-[8px] text-[11px] font-semibold cursor-pointer transition-all nv-press"
       style={{
-        background: active ? "var(--card)" : "none",
-        border: "1px solid transparent",
-        color: active ? "var(--text)" : "var(--text-mute)",
+        background: active ? "var(--glass-strong)" : "transparent",
+        border: `1px solid ${active ? "var(--hairline-strong)" : "transparent"}`,
+        color: active ? "var(--text)" : "var(--text-dim)",
         fontFamily: "inherit",
       }}
-      onMouseEnter={e => { e.currentTarget.style.background = "var(--card)"; e.currentTarget.style.color = "var(--text)"; }}
+      onMouseEnter={e => {
+        e.currentTarget.style.background = "var(--glass)";
+        e.currentTarget.style.color = "var(--text)";
+      }}
       onMouseLeave={e => {
-        if (!active) { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-mute)"; }
+        if (!active) {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = "var(--text-dim)";
+        }
       }}
     >
       {children}
@@ -109,12 +170,19 @@ function ActionBtn({
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Avatar · quiet geometric mark
+   ══════════════════════════════════════════════════════════════ */
 function Avatar({ role }: { role: "user" | "assistant" }) {
   if (role === "user") {
     return (
       <div
-        className="w-[30px] h-[30px] rounded-lg grid place-items-center mono text-[11px] font-bold flex-shrink-0"
-        style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text)" }}
+        className="w-[30px] h-[30px] rounded-[10px] grid place-items-center flex-shrink-0 mono text-[10px] font-bold tracking-wider"
+        style={{
+          background: "var(--glass)",
+          border: "1px solid var(--hairline)",
+          color: "var(--text-dim)",
+        }}
       >
         YOU
       </div>
@@ -122,17 +190,29 @@ function Avatar({ role }: { role: "user" | "assistant" }) {
   }
   return (
     <div
-      className="w-[30px] h-[30px] rounded-lg grid place-items-center mono text-[11px] font-bold flex-shrink-0"
+      className="w-[30px] h-[30px] rounded-[10px] grid place-items-center flex-shrink-0 font-display font-semibold text-[14px] relative overflow-hidden"
       style={{
         background: "var(--text)",
-        color: "var(--bg)",
+        color: "var(--bg-base)",
+        boxShadow: "0 2px 10px -2px rgba(0,0,0,0.3)",
       }}
     >
-      NV
+      <span
+        aria-hidden
+        className="absolute inset-0 opacity-60"
+        style={{
+          background:
+            "radial-gradient(circle at 30% 20%, var(--accent-glow) 0%, transparent 60%)",
+        }}
+      />
+      <span className="relative" style={{ lineHeight: 1 }}>Ｎ</span>
     </div>
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   Main MessageView
+   ══════════════════════════════════════════════════════════════ */
 export function MessageView({
   message,
   modelName,
@@ -160,11 +240,15 @@ export function MessageView({
   const isSystem = message.role === "system";
   const [showSources, setShowSources] = useState(false);
 
-  const imageAttachments = (message.attachments || []).filter(a => a.type.startsWith("image/"));
+  const imageAttachments = (message.attachments || []).filter(a =>
+    a.type.startsWith("image/")
+  );
   const fileAttachments = (message.attachments || []).filter(
     a => a.type !== "source" && !a.type.startsWith("image/")
   );
-  const sourceAttachments = (message.attachments || []).filter(a => a.type === "source");
+  const sourceAttachments = (message.attachments || []).filter(
+    a => a.type === "source"
+  );
 
   const { thinking: contentThinking, cleaned: cleanedContent } = useMemo(
     () => parseThinkTags(message.content),
@@ -188,189 +272,296 @@ export function MessageView({
 
   if (isSystem) {
     return (
-      <div className="flex justify-center py-3">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="flex justify-center py-3"
+      >
         <span
-          className="mono text-[12px] px-3.5 py-1.5 rounded-full"
+          className="mono text-[11.5px] px-3 py-1.5 rounded-full"
           style={{
             background: "var(--danger-soft)",
             color: "var(--danger)",
             border: "1px solid var(--danger)",
+            backdropFilter: "blur(10px)",
           }}
         >
           {message.content}
         </span>
-      </div>
+      </motion.div>
     );
   }
 
   const ts = new Date(message.createdAt).toTimeString().slice(0, 5);
 
   return (
-    <div className="group/msg mb-[26px]">
-      <div className="flex items-center gap-2.5 mb-2.5">
-        <Avatar role={isUser ? "user" : "assistant"} />
-        <span className="text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>
-          {isUser ? "You" : modelName}
-        </span>
-        <span className="ml-auto mono text-[11px]" style={{ color: "var(--text-mute)" }}>{ts}</span>
-        {isUser && !isEditing && !isStreaming && (
-          <button
-            onClick={onEditStart}
-            className="p-1.5 rounded-md cursor-pointer opacity-0 group-hover/msg:opacity-100 transition-all"
-            style={{ background: "none", border: "none", color: "var(--text-mute)" }}
-            title="Edit message"
-            onMouseEnter={e => { e.currentTarget.style.background = "var(--card)"; e.currentTarget.style.color = "var(--text)"; }}
-            onMouseLeave={e => { e.currentTarget.style.background = "none"; e.currentTarget.style.color = "var(--text-mute)"; }}
+    <TooltipProvider>
+      <motion.div
+        layout="position"
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ type: "spring", stiffness: 320, damping: 34 }}
+        className="group/msg mb-7"
+      >
+        <div className="flex items-center gap-2.5 mb-2.5">
+          <Avatar role={isUser ? "user" : "assistant"} />
+          <span
+            className="text-[13.5px] font-semibold tracking-[-0.01em]"
+            style={{ color: "var(--text)" }}
           >
-            <Pencil size={12} />
-          </button>
-        )}
-      </div>
-
-      <div className="pl-10">
-        {!isUser && <Reasoning text={fullReasoning} />}
-
-        {imageAttachments.length > 0 && (
-          <div className="flex flex-wrap gap-3 mb-3">
-            {imageAttachments.map((att, i) => (
-              <div
-                key={i}
-                className="relative rounded-xl overflow-hidden cursor-zoom-in"
-                style={{ border: "1px solid var(--border)", background: "var(--card)" }}
-                onClick={() => onImageClick?.(att.data)}
-              >
-                <img src={att.data} alt={att.name} className="max-h-[300px] max-w-full object-contain block" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {fileAttachments.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {fileAttachments.map((att, i) => (
-              <FileChip key={i} att={att} />
-            ))}
-          </div>
-        )}
-
-        {isUser ? (
-          isEditing ? (
-            <div className="space-y-2">
-              <textarea
-                value={editInput}
-                onChange={e => onEditChange(e.target.value)}
-                onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); onEditSubmit(); } }}
-                autoFocus
-                rows={2}
-                className="w-full rounded-lg px-3 py-2.5 text-[14px] resize-none nv-focus-ring"
-                style={{
-                  background: "var(--panel)",
-                  border: "1px solid var(--border)",
-                  color: "var(--text)",
-                  outline: "none",
-                  fontFamily: "inherit",
-                  minHeight: 60,
-                  maxHeight: 200,
-                }}
-              />
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={onEditSubmit}
-                  className="px-3 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer flex items-center gap-1.5"
-                  style={{ background: "var(--accent)", color: "var(--accent-ink)", border: "none" }}
-                >
-                  <Send size={12} /> Submit
-                </button>
-                <button
-                  onClick={onEditCancel}
-                  className="px-3 py-1.5 rounded-lg text-[12px] cursor-pointer"
-                  style={{ background: "none", border: "none", color: "var(--text-dim)", fontFamily: "inherit" }}
-                >
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            message.content ? (
-              <p
-                className="text-[14.5px] leading-relaxed whitespace-pre-wrap"
-                style={{ color: "var(--text)" }}
-              >
-                {message.content.replace(/^\[Attached:.*?\]\n*/, "")}
-              </p>
-            ) : null
-          )
-        ) : (
-          <div className="markdown-body">
-            <MarkdownContent content={processContent(cleanedContent)} />
-          </div>
-        )}
-
-        {sourceAttachments.length > 0 && (
-          <div className="mt-4">
+            {isUser ? "You" : modelName}
+          </span>
+          <span
+            className="ml-auto mono text-[10.5px] tracking-wide font-semibold"
+            style={{ color: "var(--text-dim)" }}
+          >
+            {ts}
+          </span>
+          {isUser && !isEditing && !isStreaming && (
             <button
-              onClick={() => setShowSources(v => !v)}
-              className="flex items-center gap-2 mono text-[12px] px-3 py-1.5 rounded-lg cursor-pointer transition-colors"
-              style={{
-                background: "var(--card)",
-                border: "1px solid var(--border)",
-                color: "var(--text-mute)",
-                fontFamily: "inherit",
+              type="button"
+              onClick={onEditStart}
+              className="w-7 h-7 grid place-items-center rounded-lg cursor-pointer opacity-0 group-hover/msg:opacity-100 transition-all nv-press"
+              style={{ background: "none", border: "none", color: "var(--text-dim)" }}
+              title="Edit message"
+              onMouseEnter={e => {
+                e.currentTarget.style.background = "var(--glass)";
+                e.currentTarget.style.color = "var(--text)";
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = "none";
+                e.currentTarget.style.color = "var(--text-dim)";
               }}
             >
-              <Globe size={12} />
-              <span>{sourceAttachments.length} Source{sourceAttachments.length > 1 ? "s" : ""}</span>
-              <ChevronRight size={11} style={{ transform: showSources ? "rotate(90deg)" : "rotate(0deg)", transition: "transform .2s" }} />
+              <Pencil size={12} />
             </button>
-            {showSources && (
-              <div className="flex flex-wrap gap-2 mt-2">
-                {sourceAttachments.map((s, i) => (
-                  <a
-                    key={i}
-                    href={s.data}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-[11.5px] transition-all"
+          )}
+        </div>
+
+        <div className="pl-10">
+          {!isUser && <Reasoning text={fullReasoning} />}
+
+          {imageAttachments.length > 0 && (
+            <div className="flex flex-wrap gap-3 mb-3">
+              {imageAttachments.map((att, i) => (
+                <div
+                  key={i}
+                  className="relative rounded-[16px] overflow-hidden cursor-zoom-in nv-hover-lift"
+                  style={{
+                    border: "1px solid var(--hairline)",
+                    background: "var(--glass)",
+                    boxShadow: "var(--shadow-panel)",
+                  }}
+                  onClick={() => onImageClick?.(att.data)}
+                >
+                  <img
+                    src={att.data}
+                    alt={att.name}
+                    className="max-h-[320px] max-w-full object-contain block"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+
+          {fileAttachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-3">
+              {fileAttachments.map((att, i) => (
+                <FileChip key={i} att={att} />
+              ))}
+            </div>
+          )}
+
+          {isUser ? (
+            isEditing ? (
+              <div
+                className="glass-strong p-2 space-y-2"
+                style={{ borderRadius: 16 }}
+              >
+                <textarea
+                  value={editInput}
+                  onChange={e => onEditChange(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      onEditSubmit();
+                    }
+                  }}
+                  autoFocus
+                  rows={2}
+                  className="w-full rounded-[10px] px-3 py-2.5 text-[14px] resize-none bg-transparent border-none outline-none"
+                  style={{
+                    color: "var(--text)",
+                    fontFamily: "inherit",
+                    minHeight: 60,
+                    maxHeight: 200,
+                  }}
+                />
+                <div className="flex items-center gap-2 px-1">
+                  <button
+                    type="button"
+                    onClick={onEditSubmit}
+                    className="px-3 py-1.5 rounded-[10px] text-[12px] font-semibold cursor-pointer flex items-center gap-1.5 nv-press"
                     style={{
-                      background: "var(--card)",
-                      border: "1px solid var(--border)",
-                      color: "var(--text-dim)",
+                      background: "var(--text)",
+                      color: "var(--bg-base)",
+                      border: "none",
                     }}
                   >
-                    <span
-                      className="flex items-center justify-center w-[18px] h-[18px] rounded mono text-[10px] font-bold"
-                      style={{ background: "var(--bg)", color: "var(--accent)", border: "1px solid var(--border)" }}
-                    >
-                      {i + 1}
-                    </span>
-                    <span className="truncate max-w-[220px]">{s.name}</span>
-                  </a>
-                ))}
+                    <ArrowUp size={12} /> Resend
+                  </button>
+                  <button
+                    type="button"
+                    onClick={onEditCancel}
+                    className="px-3 py-1.5 rounded-[10px] text-[12px] cursor-pointer"
+                    style={{
+                      background: "transparent",
+                      border: "none",
+                      color: "var(--text-dim)",
+                      fontFamily: "inherit",
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+            ) : message.content ? (
+              <div
+                className="inline-block max-w-full px-[14px] py-[10px]"
+                style={{
+                  background: "var(--glass-strong)",
+                  border: "1px solid var(--hairline)",
+                  borderRadius: 18,
+                  backdropFilter: "blur(18px) saturate(1.4)",
+                  WebkitBackdropFilter: "blur(18px) saturate(1.4)",
+                  boxShadow: "var(--shadow-inset)",
+                }}
+              >
+                <p
+                  className="text-[14.5px] leading-relaxed whitespace-pre-wrap"
+                  style={{ color: "var(--text)", margin: 0 }}
+                >
+                  {message.content.replace(/^\[Attached:.*?\]\n*/, "")}
+                </p>
+              </div>
+            ) : null
+          ) : (
+            <div className="markdown-body">
+              <MarkdownContent content={processContent(cleanedContent)} />
+            </div>
+          )}
 
-        {!isUser && !isStreaming && <MessageActions content={cleanedContent} />}
-      </div>
-    </div>
+          {sourceAttachments.length > 0 && (
+            <div className="mt-4">
+              <button
+                type="button"
+                onClick={() => setShowSources(v => !v)}
+                className="flex items-center gap-2 mono text-[11px] px-3 py-1.5 rounded-[10px] cursor-pointer transition-all nv-press"
+                style={{
+                  background: "var(--glass-soft)",
+                  border: "1px solid var(--hairline)",
+                  color: "var(--text-dim)",
+                  fontFamily: "inherit",
+                }}
+              >
+                <Globe size={11} style={{ color: "var(--accent)" }} />
+                <span>
+                  {sourceAttachments.length} source
+                  {sourceAttachments.length > 1 ? "s" : ""}
+                </span>
+                <motion.span
+                  animate={{ rotate: showSources ? 90 : 0 }}
+                  transition={{ type: "spring", stiffness: 420, damping: 28 }}
+                  className="inline-flex"
+                >
+                  <ChevronRight size={10} />
+                </motion.span>
+              </button>
+              <AnimatePresence>
+                {showSources && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    className="overflow-hidden"
+                  >
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {sourceAttachments.map((s, i) => (
+                        <a
+                          key={i}
+                          href={s.data}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 px-2.5 py-1.5 rounded-[10px] text-[11.5px] nv-hover-lift"
+                          style={{
+                            background: "var(--glass)",
+                            border: "1px solid var(--hairline)",
+                            color: "var(--text-dim)",
+                          }}
+                        >
+                          <span
+                            className="flex items-center justify-center w-[18px] h-[18px] rounded-md mono text-[10px] font-bold"
+                            style={{
+                              background: "var(--accent-soft)",
+                              color: "var(--accent)",
+                            }}
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="truncate max-w-[220px]">{s.name}</span>
+                        </a>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
+          )}
+
+          {!isUser && !isStreaming && <MessageActions content={cleanedContent} />}
+        </div>
+      </motion.div>
+    </TooltipProvider>
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   File chip + preview dialog
+   ══════════════════════════════════════════════════════════════ */
 function iconForFile(att: MessageAttachment) {
   const t = att.type.toLowerCase();
   const ext = att.name.split(".").pop()?.toLowerCase() || "";
-  if (t === "application/pdf" || ext === "pdf") return { Icon: FileText, tint: "#d8443b", label: "PDF" };
-  if (ext === "docx" || ext === "doc" || t.includes("word")) return { Icon: FileText, tint: "#2b5bd8", label: "DOC" };
-  if (ext === "xlsx" || ext === "xls" || ext === "csv" || ext === "tsv" || t.includes("spreadsheet") || t === "text/csv")
-    return { Icon: FileSpreadsheet, tint: "#1f8a4c", label: ext.toUpperCase() || "XLS" };
+  if (t === "application/pdf" || ext === "pdf")
+    return { Icon: FileText, tint: "#c83d3d", label: "PDF" };
+  if (ext === "docx" || ext === "doc" || t.includes("word"))
+    return { Icon: FileText, tint: "#2b5bd8", label: "DOC" };
+  if (
+    ext === "xlsx" ||
+    ext === "xls" ||
+    ext === "csv" ||
+    ext === "tsv" ||
+    t.includes("spreadsheet") ||
+    t === "text/csv"
+  )
+    return {
+      Icon: FileSpreadsheet,
+      tint: "#1f8a4c",
+      label: ext.toUpperCase() || "XLS",
+    };
   if (ext === "pptx" || ext === "ppt" || t.includes("presentation"))
     return { Icon: Presentation, tint: "#d97706", label: "PPT" };
-  if (["json", "xml", "yaml", "yml", "html", "css", "js", "jsx", "ts", "tsx", "py", "go", "rs", "rb", "php", "java", "c", "cpp", "h", "hpp", "cs", "swift", "kt", "sh", "sql"].includes(ext))
-    return { Icon: FileCode, tint: "#6b46c1", label: ext.toUpperCase() };
-  if (t.startsWith("text/") || ["txt", "md", "markdown", "log", "toml", "ini", "conf", "env"].includes(ext))
-    return { Icon: FileText, tint: "#4d4d52", label: ext.toUpperCase() || "TXT" };
-  return { Icon: FileIcon, tint: "#4d4d52", label: ext.toUpperCase() || "FILE" };
+  if (
+    [
+      "json","xml","yaml","yml","html","css","js","jsx","ts","tsx","py","go","rs","rb","php","java","c","cpp","h","hpp","cs","swift","kt","sh","sql",
+    ].includes(ext)
+  )
+    return { Icon: FileCode, tint: "#7552c4", label: ext.toUpperCase() };
+  if (
+    t.startsWith("text/") ||
+    ["txt", "md", "markdown", "log", "toml", "ini", "conf", "env"].includes(ext)
+  )
+    return { Icon: FileText, tint: "#5d5d65", label: ext.toUpperCase() || "TXT" };
+  return { Icon: FileIcon, tint: "#5d5d65", label: ext.toUpperCase() || "FILE" };
 }
 
 function humanSize(dataUri: string): string {
@@ -398,14 +589,26 @@ function canPreviewInline(att: MessageAttachment): "pdf" | "text" | "extract" | 
   const ext = att.name.split(".").pop()?.toLowerCase() || "";
   if (t === "application/pdf" || ext === "pdf") return "pdf";
   const textExts = [
-    "txt", "md", "markdown", "json", "xml", "yaml", "yml", "log", "csv", "tsv",
-    "html", "css", "js", "jsx", "ts", "tsx", "py", "go", "rs", "rb", "php",
-    "java", "c", "cpp", "h", "hpp", "cs", "swift", "kt", "sh", "sql", "toml",
-    "ini", "conf", "env",
+    "txt","md","markdown","json","xml","yaml","yml","log","csv","tsv",
+    "html","css","js","jsx","ts","tsx","py","go","rs","rb","php",
+    "java","c","cpp","h","hpp","cs","swift","kt","sh","sql","toml",
+    "ini","conf","env",
   ];
-  if (t.startsWith("text/") || t === "application/json" || t === "application/xml" || textExts.includes(ext)) return "text";
+  if (
+    t.startsWith("text/") ||
+    t === "application/json" ||
+    t === "application/xml" ||
+    textExts.includes(ext)
+  )
+    return "text";
   const extractExts = ["docx", "xlsx", "xls", "pptx"];
-  if (extractExts.includes(ext) || t.includes("word") || t.includes("spreadsheet") || t.includes("presentation")) return "extract";
+  if (
+    extractExts.includes(ext) ||
+    t.includes("word") ||
+    t.includes("spreadsheet") ||
+    t.includes("presentation")
+  )
+    return "extract";
   return "none";
 }
 
@@ -428,7 +631,15 @@ function dataUriToBlob(dataUri: string): Blob | null {
   }
 }
 
-function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: () => void }) {
+function FilePreviewModal({
+  att,
+  open,
+  onClose,
+}: {
+  att: MessageAttachment;
+  open: boolean;
+  onClose: () => void;
+}) {
   const kind = canPreviewInline(att);
   const [extracted, setExtracted] = useState<string>("");
   const [extractStatus, setExtractStatus] = useState<"idle" | "loading" | "error" | "done">(
@@ -448,16 +659,22 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
   }, []);
 
   useEffect(() => {
-    if (kind !== "extract") return;
+    if (!open || kind !== "extract") return;
     let cancelled = false;
     (async () => {
       try {
         const blob = dataUriToBlob(att.data);
-        if (!blob) { if (!cancelled) setExtractStatus("error"); return; }
+        if (!blob) {
+          if (!cancelled) setExtractStatus("error");
+          return;
+        }
         const fd = new FormData();
         fd.append("file", new File([blob], att.name, { type: att.type }));
         const r = await fetch("/api/extract", { method: "POST", body: fd });
-        if (!r.ok) { if (!cancelled) setExtractStatus("error"); return; }
+        if (!r.ok) {
+          if (!cancelled) setExtractStatus("error");
+          return;
+        }
         const j = await r.json();
         if (cancelled) return;
         setExtracted(j.text || "");
@@ -466,22 +683,37 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
         if (!cancelled) setExtractStatus("error");
       }
     })();
-    return () => { cancelled = true; };
-  }, [att, kind]);
+    return () => {
+      cancelled = true;
+    };
+  }, [att, kind, open]);
 
-  // On mobile, browsers don't render data-URI PDFs in iframes — fetch rasterized pages.
   useEffect(() => {
-    if (kind !== "pdf" || !isMobile) return;
+    if (!open || kind !== "pdf" || !isMobile) return;
     let cancelled = false;
     setPdfImagesStatus("loading");
     (async () => {
       try {
         const blob = dataUriToBlob(att.data);
-        if (!blob) { if (!cancelled) setPdfImagesStatus("error"); return; }
+        if (!blob) {
+          if (!cancelled) setPdfImagesStatus("error");
+          return;
+        }
         const fd = new FormData();
-        fd.append("file", new File([blob], att.name, { type: att.type || "application/pdf" }));
-        const r = await fetch("/api/extract?preview=1", { method: "POST", body: fd });
-        if (!r.ok) { if (!cancelled) setPdfImagesStatus("error"); return; }
+        fd.append(
+          "file",
+          new File([blob], att.name, {
+            type: att.type || "application/pdf",
+          })
+        );
+        const r = await fetch("/api/extract?preview=1", {
+          method: "POST",
+          body: fd,
+        });
+        if (!r.ok) {
+          if (!cancelled) setPdfImagesStatus("error");
+          return;
+        }
         const j = await r.json();
         if (cancelled) return;
         setPdfImages(Array.isArray(j.images) ? j.images : []);
@@ -490,64 +722,46 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
         if (!cancelled) setPdfImagesStatus("error");
       }
     })();
-    return () => { cancelled = true; };
-  }, [kind, isMobile, att]);
+    return () => {
+      cancelled = true;
+    };
+  }, [kind, isMobile, att, open]);
 
   return (
-    <div
-      className="fixed inset-0 z-[100] flex items-center justify-center p-4"
-      style={{ background: "rgba(0,0,0,0.8)", backdropFilter: "blur(6px)" }}
-      onClick={onClose}
-    >
-      <div
-        className="w-full max-w-[960px] h-[85vh] rounded-xl overflow-hidden flex flex-col"
-        style={{ background: "var(--panel)", border: "1px solid var(--border)" }}
-        onClick={e => e.stopPropagation()}
+    <Dialog open={open} onOpenChange={v => !v && onClose()}>
+      <DialogContent
+        title={att.name}
+        onClose={onClose}
       >
         <div
-          className="flex items-center gap-3 px-4 py-3"
-          style={{ borderBottom: "1px solid var(--border)" }}
+          className="flex items-center gap-2 px-5 py-3"
+          style={{ borderBottom: "1px solid var(--hairline)" }}
         >
-          <span className="text-[13.5px] font-semibold truncate flex-1" style={{ color: "var(--text)" }}>{att.name}</span>
           <a
             href={att.data}
             download={att.name}
-            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-[12px] cursor-pointer"
-            style={{ background: "var(--card)", color: "var(--text-dim)", textDecoration: "none" }}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-[10px] text-[12px] cursor-pointer nv-press"
+            style={{
+              background: "var(--glass)",
+              border: "1px solid var(--hairline)",
+              color: "var(--text-dim)",
+              textDecoration: "none",
+            }}
             title="Download"
           >
-            <Download size={13} /> Download
+            <Download size={12} /> Download
           </a>
-          <button
-            onClick={onClose}
-            className="p-1.5 rounded-md cursor-pointer"
-            style={{ background: "var(--card)", border: "none", color: "var(--text-dim)" }}
-            aria-label="Close"
-          >
-            <X size={14} />
-          </button>
         </div>
-        <div className="flex-1 min-h-0 overflow-auto" style={{ background: "var(--canvas)" }}>
+        <div
+          className="flex-1 min-h-0 overflow-auto"
+          style={{ background: "var(--bg-tone)" }}
+        >
           {kind === "pdf" ? (
             isMobile ? (
               pdfImagesStatus === "loading" || pdfImagesStatus === "idle" ? (
-                <div className="h-full grid place-items-center">
-                  <div className="flex items-center gap-2 mono text-[13px]" style={{ color: "var(--text-dim)" }}>
-                    <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)", animation: "nv-blink 1s steps(1) infinite" }} />
-                    Rendering PDF…
-                  </div>
-                </div>
+                <LoadingRow label="Rendering PDF…" />
               ) : pdfImagesStatus === "error" || !pdfImages?.length ? (
-                <div className="h-full grid place-items-center p-8 text-center">
-                  <div>
-                    <p className="text-[14px] mb-3" style={{ color: "var(--text-dim)" }}>Could not render preview.</p>
-                    <a href={att.data} download={att.name}
-                      className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-medium"
-                      style={{ background: "var(--accent)", color: "var(--accent-ink)", textDecoration: "none" }}>
-                      <Download size={13} /> Download
-                    </a>
-                  </div>
-                </div>
+                <ErrorRow att={att} message="Could not render preview." />
               ) : (
                 <div className="flex flex-col gap-3 p-3" style={{ background: "#2a2a2a" }}>
                   {pdfImages.map((src, i) => (
@@ -571,56 +785,72 @@ function FilePreviewModal({ att, onClose }: { att: MessageAttachment; onClose: (
             )
           ) : kind === "text" ? (
             <pre
-              className="p-4 text-[12.5px] mono whitespace-pre-wrap break-words"
+              className="p-5 text-[12.5px] mono whitespace-pre-wrap break-words"
               style={{ color: "var(--text)", margin: 0 }}
             >
               {textBody}
             </pre>
           ) : kind === "extract" ? (
             extractStatus === "loading" ? (
-              <div className="h-full grid place-items-center">
-                <div className="flex items-center gap-2 mono text-[13px]" style={{ color: "var(--text-dim)" }}>
-                  <span className="inline-block w-1.5 h-1.5 rounded-full" style={{ background: "var(--accent)", animation: "nv-blink 1s steps(1) infinite" }} />
-                  Extracting preview…
-                </div>
-              </div>
+              <LoadingRow label="Extracting preview…" />
             ) : extractStatus === "error" ? (
-              <div className="h-full grid place-items-center p-8 text-center">
-                <div>
-                  <p className="text-[14px] mb-3" style={{ color: "var(--text-dim)" }}>Preview failed to load.</p>
-                  <a href={att.data} download={att.name}
-                    className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-medium"
-                    style={{ background: "var(--accent)", color: "var(--accent-ink)", textDecoration: "none" }}>
-                    <Download size={13} /> Download
-                  </a>
-                </div>
-              </div>
+              <ErrorRow att={att} message="Preview failed to load." />
             ) : (
               <pre
-                className="p-4 text-[12.5px] mono whitespace-pre-wrap break-words"
+                className="p-5 text-[12.5px] mono whitespace-pre-wrap break-words"
                 style={{ color: "var(--text)", margin: 0 }}
               >
                 {extracted || "(no extractable content)"}
               </pre>
             )
           ) : (
-            <div className="h-full grid place-items-center p-8 text-center">
-              <div>
-                <p className="text-[14px] mb-3" style={{ color: "var(--text-dim)" }}>
-                  No inline preview available for this format.
-                </p>
-                <a
-                  href={att.data}
-                  download={att.name}
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-lg text-[12.5px] font-medium"
-                  style={{ background: "var(--accent)", color: "var(--accent-ink)", textDecoration: "none" }}
-                >
-                  <Download size={13} /> Download {att.name}
-                </a>
-              </div>
-            </div>
+            <ErrorRow att={att} message="No inline preview available for this format." />
           )}
         </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function LoadingRow({ label }: { label: string }) {
+  return (
+    <div className="h-full grid place-items-center">
+      <div
+        className="flex items-center gap-2 mono text-[13px]"
+        style={{ color: "var(--text-dim)" }}
+      >
+        <span className="nv-dot" />
+        {label}
+      </div>
+    </div>
+  );
+}
+
+function ErrorRow({
+  att,
+  message,
+}: {
+  att: MessageAttachment;
+  message: string;
+}) {
+  return (
+    <div className="h-full grid place-items-center p-8 text-center">
+      <div>
+        <p className="text-[14px] mb-3" style={{ color: "var(--text-dim)" }}>
+          {message}
+        </p>
+        <a
+          href={att.data}
+          download={att.name}
+          className="inline-flex items-center gap-2 px-3 py-2 rounded-[10px] text-[12.5px] font-medium"
+          style={{
+            background: "var(--text)",
+            color: "var(--bg-base)",
+            textDecoration: "none",
+          }}
+        >
+          <Download size={13} /> Download {att.name}
+        </a>
       </div>
     </div>
   );
@@ -635,37 +865,55 @@ function FileChip({ att }: { att: MessageAttachment }) {
       <button
         type="button"
         onClick={() => setPreview(true)}
-        className="group/chip flex items-center gap-2.5 px-3 py-2 rounded-xl transition-colors cursor-pointer"
+        className="flex items-center gap-2.5 px-3 py-2 rounded-[14px] transition-all cursor-pointer nv-hover-lift"
         style={{
-          background: "var(--card)",
-          border: "1px solid var(--border)",
+          background: "var(--glass)",
+          border: "1px solid var(--hairline)",
           color: "var(--text)",
           maxWidth: 280,
           fontFamily: "inherit",
           textAlign: "left",
         }}
-        onMouseEnter={e => { e.currentTarget.style.background = "var(--card-hover)"; }}
-        onMouseLeave={e => { e.currentTarget.style.background = "var(--card)"; }}
+        onMouseEnter={e => {
+          e.currentTarget.style.background = "var(--glass-strong)";
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.background = "var(--glass)";
+        }}
         title={`Preview ${att.name}`}
       >
         <div
-          className="grid place-items-center rounded-lg flex-shrink-0"
-          style={{ width: 34, height: 34, background: tint + "22", color: tint }}
+          className="grid place-items-center rounded-[10px] flex-shrink-0"
+          style={{ width: 34, height: 34, background: tint + "1f", color: tint }}
         >
-          <Icon size={16} />
+          <Icon size={15} />
         </div>
         <div className="flex flex-col min-w-0 flex-1">
-          <span className="text-[12.5px] font-medium truncate" style={{ color: "var(--text)" }}>{att.name}</span>
-          <span className="mono text-[10.5px]" style={{ color: "var(--text-mute)" }}>
-            {label}{size ? ` · ${size}` : ""}
+          <span
+            className="text-[12.5px] font-medium truncate"
+            style={{ color: "var(--text)" }}
+          >
+            {att.name}
+          </span>
+          <span
+            className="mono text-[10px] tracking-wide"
+            style={{ color: "var(--text-mute)" }}
+          >
+            {label}
+            {size ? ` · ${size}` : ""}
           </span>
         </div>
       </button>
-      {preview && <FilePreviewModal att={att} onClose={() => setPreview(false)} />}
+      {preview && (
+        <FilePreviewModal att={att} open={preview} onClose={() => setPreview(false)} />
+      )}
     </>
   );
 }
 
+/* ══════════════════════════════════════════════════════════════
+   StreamingView
+   ══════════════════════════════════════════════════════════════ */
 export function StreamingView({
   modelName,
   streamContent,
@@ -683,10 +931,28 @@ export function StreamingView({
   const reasoning = streamReasoning || parsed.thinking;
 
   return (
-    <div className="mb-[26px]">
+    <motion.div
+      layout="position"
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ type: "spring", stiffness: 320, damping: 34 }}
+      className="mb-7"
+    >
       <div className="flex items-center gap-2.5 mb-2.5">
         <Avatar role="assistant" />
-        <span className="text-[13.5px] font-semibold" style={{ color: "var(--text)" }}>{modelName}</span>
+        <span
+          className="text-[13.5px] font-semibold tracking-[-0.01em]"
+          style={{ color: "var(--text)" }}
+        >
+          {modelName}
+        </span>
+        <span
+          className="ml-3 flex items-center gap-1.5 mono text-[10px] tracking-[0.1em] uppercase"
+          style={{ color: "var(--accent)" }}
+        >
+          <span className="nv-dot" />
+          thinking
+        </span>
       </div>
       <div className="pl-10">
         {searchSources.length > 0 && (
@@ -697,10 +963,15 @@ export function StreamingView({
                 href={s.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px]"
-                style={{ background: "var(--card)", border: "1px solid var(--border)", color: "var(--text-dim)", maxWidth: 220 }}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-[10px] text-[11px]"
+                style={{
+                  background: "var(--glass)",
+                  border: "1px solid var(--hairline)",
+                  color: "var(--text-dim)",
+                  maxWidth: 220,
+                }}
               >
-                <Globe size={11} />
+                <Globe size={11} style={{ color: "var(--accent)" }} />
                 <span className="truncate">{s.title}</span>
               </a>
             ))}
@@ -715,20 +986,27 @@ export function StreamingView({
             <span className="nv-cursor" />
           </div>
         ) : !reasoning && !isSearching ? (
-          <div className="flex items-center gap-2 mono text-[13px]" style={{ color: "var(--text-dim)" }}>
-            <span
-              className="inline-block w-1.5 h-1.5 rounded-full"
-              style={{ background: "var(--accent)", animation: "nv-blink 1s steps(1) infinite" }}
-            />
-            Processing…
+          <div
+            className="flex items-center gap-2.5 mono text-[12.5px]"
+            style={{ color: "var(--text-dim)" }}
+          >
+            <span className="nv-dot" />
+            <span className="nv-text-gradient">weaving response</span>
           </div>
         ) : isSearching ? (
-          <div className="flex items-center gap-2 mono text-[13px]" style={{ color: "var(--text-dim)" }}>
-            <Globe size={13} style={{ color: "var(--accent)" }} className="animate-spin" />
-            Searching…
+          <div
+            className="flex items-center gap-2.5 mono text-[12.5px]"
+            style={{ color: "var(--text-dim)" }}
+          >
+            <Globe
+              size={13}
+              style={{ color: "var(--accent)" }}
+              className="animate-spin"
+            />
+            scanning the web…
           </div>
         ) : null}
       </div>
-    </div>
+    </motion.div>
   );
 }

@@ -2,6 +2,8 @@
 
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { X } from "lucide-react";
+import { AnimatePresence, motion } from "motion/react";
+import { toast } from "sonner";
 import { Model, Conversation, Message, MessageAttachment } from "@/lib/types";
 import { Sidebar } from "@/components/Sidebar";
 import { Topbar } from "@/components/Topbar";
@@ -45,7 +47,9 @@ export default function ChatPage() {
     const next: "light" | "dark" = theme === "dark" ? "light" : "dark";
     setTheme(next);
     document.documentElement.classList.toggle("dark", next === "dark");
-    try { localStorage.setItem("nv.theme", next); } catch {}
+    try {
+      localStorage.setItem("nv.theme", next);
+    } catch {}
   }, [theme]);
 
   const stopGeneration = useCallback(() => {
@@ -56,7 +60,10 @@ export default function ChatPage() {
   }, []);
 
   /* ─ data fetching ─ */
-  useEffect(() => { fetchModels(); fetchConversations(); }, []);
+  useEffect(() => {
+    fetchModels();
+    fetchConversations();
+  }, []);
 
   /* ─ mobile detection ─ */
   useEffect(() => {
@@ -97,12 +104,14 @@ export default function ChatPage() {
     setActiveConversation(id);
     if (isMobile) setSidebarOpen(false);
     setTimeout(() => {
-      if (scrollRef.current) scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "auto" });
+      if (scrollRef.current)
+        scrollRef.current.scrollTo({ top: scrollRef.current.scrollHeight, behavior: "auto" });
     }, 50);
   }
   async function createConversation() {
     const conv = await fetch("/api/conversations", {
-      method: "POST", headers: { "Content-Type": "application/json" },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ modelId: selectedModelId }),
     }).then(r => r.json());
     setConversations(p => [conv, ...p]);
@@ -110,10 +119,25 @@ export default function ChatPage() {
     setMessages([]);
     return conv.id;
   }
-  async function deleteConversation(id: string) {
-    await fetch(`/api/conversations?id=${id}`, { method: "DELETE" });
-    setConversations(p => p.filter(c => c.id !== id));
-    if (activeConversation === id) { setActiveConversation(null); setMessages([]); }
+  function deleteConversation(id: string) {
+    const conv = conversations.find(c => c.id === id);
+    const title = conv?.title || "this conversation";
+    toast(`Delete "${title}"?`, {
+      duration: 6000,
+      action: {
+        label: "Delete",
+        onClick: async () => {
+          await fetch(`/api/conversations?id=${id}`, { method: "DELETE" });
+          setConversations(p => p.filter(c => c.id !== id));
+          if (activeConversation === id) {
+            setActiveConversation(null);
+            setMessages([]);
+          }
+          toast.success("Removed");
+        },
+      },
+      cancel: { label: "Cancel", onClick: () => {} },
+    });
   }
 
   function fileToBase64(file: File): Promise<string> {
@@ -125,13 +149,125 @@ export default function ChatPage() {
     });
   }
 
+  /* ─── Web search helpers ─── */
+  // Tag the query with a freshness window when the user clearly asks for
+  // fresh information — providers use this to prefer recently-indexed pages.
+  function detectFreshness(
+    text: string
+  ): "day" | "week" | "month" | "year" | undefined {
+    const s = text.toLowerCase();
+    if (
+      /\b(today|right now|breaking|just now|minutes? ago|hours? ago|latest)\b/.test(
+        s
+      )
+    )
+      return "day";
+    if (/\b(this week|past week|recent|newly|just released)\b/.test(s))
+      return "week";
+    if (/\b(this month|past month|recently)\b/.test(s)) return "month";
+    if (/\b(this year|past year|in 20\d\d)\b/.test(s)) return "year";
+    return undefined;
+  }
+
+  interface SearchHit {
+    title: string;
+    url: string;
+    snippet?: string;
+    raw?: string;
+    domain?: string;
+    age?: string;
+  }
+
+  function buildSearchContext(
+    query: string,
+    hits: SearchHit[],
+    provider: string
+  ): string {
+    const today = new Date().toISOString().slice(0, 10);
+    const blocks = hits
+      .map((r, i) => {
+        const body = (r.raw || r.snippet || "").slice(0, 1800);
+        const age = r.age ? `  (${r.age})` : "";
+        return `[${i + 1}] ${r.title}\nURL: ${r.url}${age}\n${body}`;
+      })
+      .join("\n\n---\n\n");
+    return [
+      `You have live web search results from ${provider}.`,
+      `Today's date is ${today}. The query issued was: "${query}".`,
+      `Rules:`,
+      `  • Use these results as ground truth for recent facts. Prefer them over prior training data when they conflict.`,
+      `  • Cite sources inline as [1], [2], etc., matching the numbered list below.`,
+      `  • If results don't cover the question, say so plainly and answer what you can without fabricating.`,
+      ``,
+      `---`,
+      `SEARCH RESULTS:`,
+      blocks,
+      `---`,
+    ].join("\n");
+  }
+
+  /* ─── AI helpers ─── */
+  const generateTitle = useCallback(
+    async (convId: string, userText: string, attachmentNames?: string[]) => {
+      if (!selectedModelId) return;
+      try {
+        const r = await fetch("/api/conversations/title", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversationId: convId,
+            modelId: selectedModelId,
+            userText,
+            attachmentNames,
+          }),
+        }).then(r => r.json());
+        if (r.title) {
+          setConversations(prev =>
+            prev.map(c => (c.id === convId ? { ...c, title: r.title } : c))
+          );
+        }
+      } catch {}
+    },
+    [selectedModelId]
+  );
+
+  const generateSearchQuery = useCallback(
+    async (
+      userText: string,
+      attachmentContext?: string,
+      history?: Array<{ role: string; content: string }>
+    ): Promise<string> => {
+      if (!selectedModelId) return userText;
+      try {
+        const r = await fetch("/api/search/query", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            modelId: selectedModelId,
+            userText,
+            attachmentContext,
+            history,
+          }),
+        }).then(r => r.json());
+        return r.query || userText;
+      } catch {
+        return userText;
+      }
+    },
+    [selectedModelId]
+  );
+
   /* ─── Edit & Resend ─── */
   async function handleEditSubmit(messageId: string) {
     if (!editInput.trim() || isStreaming || !activeConversation) return;
-    await fetch(`/api/messages?id=${messageId}&conversationId=${activeConversation}`, { method: "DELETE" });
+    await fetch(`/api/messages?id=${messageId}&conversationId=${activeConversation}`, {
+      method: "DELETE",
+    });
     const targetMsg = messages.find(m => m.id === messageId);
     if (targetMsg) {
-      setMessages(prev => prev.filter(m => new Date(m.createdAt) < new Date(targetMsg.createdAt)));
+      setMessages(prev =>
+        prev.filter(m => new Date(m.createdAt) < new Date(targetMsg.createdAt))
+      );
     }
     setEditingMessageId(null);
     const text = editInput.trim();
@@ -141,49 +277,81 @@ export default function ChatPage() {
   }
 
   /* ─── Direct send (used by edit-resubmit and empty-state prompt) ─── */
-  const sendMessageDirect = useCallback(async (textContent: string) => {
-    if (!textContent || isStreaming) return;
-    const convId = activeConversation || await createConversation();
+  const sendMessageDirect = useCallback(
+    async (textContent: string) => {
+      if (!textContent || isStreaming) return;
+      const isFreshConv = !activeConversation;
+      const convId = activeConversation || (await createConversation());
 
-    const userMsg = await fetch("/api/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: convId, role: "user", content: textContent }),
-    }).then(r => r.json());
+      const userMsg = await fetch("/api/messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: convId, role: "user", content: textContent }),
+      }).then(r => r.json());
 
-    setMessages(p => [...p, userMsg]);
-    setInput("");
-    fetchConversations();
-    setIsStreaming(true);
-    streamContentRef.current = "";
-    streamReasoningRef.current = "";
-    setStreamContent(""); setStreamReasoning("");
+      setMessages(p => [...p, userMsg]);
+      setInput("");
+      fetchConversations();
+      setIsStreaming(true);
+      streamContentRef.current = "";
+      streamReasoningRef.current = "";
+      setStreamContent("");
+      setStreamReasoning("");
 
-    const currentMsgs = await fetch(`/api/messages?conversationId=${convId}`).then(r => r.json());
-    const chatMsgs: Array<{ role: string; content: any }> = currentMsgs.map((m: any) => ({ role: m.role, content: m.content }));
+      if (isFreshConv) {
+        // don't await — run title generation alongside the main stream
+        generateTitle(convId, textContent);
+      }
 
-    let sources: Array<{ title: string; url: string }> = [];
-    if (searchEnabled && textContent) {
-      setIsSearching(true);
-      try {
-        const sr = await fetch("/api/search", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: textContent, maxResults: 5 }),
-        });
-        if (sr.ok) {
-          const { results } = await sr.json();
-          if (results?.length) {
-            sources = results.map((r: any) => ({ title: r.title, url: r.url }));
-            setSearchSources(sources);
-            const ctx = results.map((r: any, i: number) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`).join("\n\n");
-            chatMsgs.unshift({ role: "system", content: `You have access to the following real-time web search results. Cite sources using [1], [2], etc.\n\n---\nSEARCH RESULTS:\n${ctx}\n---` });
+      const currentMsgs = await fetch(`/api/messages?conversationId=${convId}`).then(r => r.json());
+      const chatMsgs: Array<{ role: string; content: any }> = currentMsgs.map((m: any) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      let sources: Array<{ title: string; url: string }> = [];
+      if (searchEnabled && textContent) {
+        setIsSearching(true);
+        try {
+          const query = await generateSearchQuery(
+            textContent,
+            undefined,
+            currentMsgs.slice(-4).map((m: any) => ({
+              role: m.role,
+              content: typeof m.content === "string" ? m.content : "",
+            }))
+          );
+          const freshness = detectFreshness(textContent);
+          const sr = await fetch("/api/search", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ query, maxResults: 8, freshness }),
+          });
+          if (sr.ok) {
+            const { results, provider } = (await sr.json()) as {
+              results: SearchHit[];
+              provider: string;
+            };
+            if (results?.length) {
+              sources = results.map(r => ({ title: r.title, url: r.url }));
+              setSearchSources(sources);
+              chatMsgs.unshift({
+                role: "system",
+                content: buildSearchContext(query, results, provider),
+              });
+            }
           }
+        } catch (e) {
+          console.error("Search failed:", e);
+        } finally {
+          setIsSearching(false);
         }
-      } catch (e) { console.error("Search failed:", e); }
-      finally { setIsSearching(false); }
-    }
+      }
 
-    await runStream(chatMsgs, convId, sources);
-  }, [isStreaming, activeConversation, selectedModelId, searchEnabled]);
+      await runStream(chatMsgs, convId, sources);
+    },
+    [isStreaming, activeConversation, selectedModelId, searchEnabled, generateTitle, generateSearchQuery]
+  );
 
   /* ─── Shared stream runner ─── */
   const runStream = async (
@@ -195,8 +363,13 @@ export default function ChatPage() {
       const abortController = new AbortController();
       abortControllerRef.current = abortController;
       const res = await fetch("/api/chat", {
-        method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: chatMsgs, modelId: selectedModelId, conversationId: convId }),
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          messages: chatMsgs,
+          modelId: selectedModelId,
+          conversationId: convId,
+        }),
         signal: abortController.signal,
       });
       if (!res.ok) throw new Error((await res.json()).error || "Request failed");
@@ -217,14 +390,23 @@ export default function ChatPage() {
         while (true) {
           const { done, value } = await reader.read();
           if (done) break;
-          for (const line of decoder.decode(value).split("\n").filter(l => l.startsWith("data: "))) {
+          for (const line of decoder
+            .decode(value)
+            .split("\n")
+            .filter(l => l.startsWith("data: "))) {
             const d = line.slice(6);
             if (d === "[DONE]") continue;
             try {
               const p = JSON.parse(d);
               if (p.type === "error") throw new Error(p.content);
-              if (p.type === "reasoning") { streamReasoningRef.current += p.content; scheduleFlush(); }
-              if (p.type === "content") { streamContentRef.current += p.content; scheduleFlush(); }
+              if (p.type === "reasoning") {
+                streamReasoningRef.current += p.content;
+                scheduleFlush();
+              }
+              if (p.type === "content") {
+                streamContentRef.current += p.content;
+                scheduleFlush();
+              }
             } catch {}
           }
         }
@@ -236,12 +418,14 @@ export default function ChatPage() {
       const { thinking: parsedThinking, cleaned: cleanedContent } = parseThinkTags(finalContent);
       const combinedReasoning = [finalReasoning, parsedThinking].filter(Boolean).join("\n\n");
 
-      const sourceAttachments = sources.length > 0
-        ? sources.map(s => ({ name: s.title, type: "source", data: s.url }))
-        : undefined;
+      const sourceAttachments =
+        sources.length > 0
+          ? sources.map(s => ({ name: s.title, type: "source", data: s.url }))
+          : undefined;
 
       const am = await fetch("/api/messages", {
-        method: "POST", headers: { "Content-Type": "application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           conversationId: convId,
           role: "assistant",
@@ -259,20 +443,30 @@ export default function ChatPage() {
           const { thinking: pt, cleaned: pc } = parseThinkTags(partial);
           const pr = [streamReasoningRef.current, pt].filter(Boolean).join("\n\n");
           const am = await fetch("/api/messages", {
-            method: "POST", headers: { "Content-Type": "application/json" },
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              conversationId: convId, role: "assistant",
-              content: pc || partial, reasoning: pr || undefined,
+              conversationId: convId,
+              role: "assistant",
+              content: pc || partial,
+              reasoning: pr || undefined,
               modelName: selectedModel?.name || "Assistant",
             }),
           }).then(r => r.json());
           setMessages(p => [...p, am]);
         }
       } else {
-        setMessages(p => [...p, {
-          id: "err-" + Date.now(), conversationId: convId, role: "system",
-          content: `Error: ${err.message}`, createdAt: new Date().toISOString(),
-        }]);
+        toast.error(err.message || "Request failed");
+        setMessages(p => [
+          ...p,
+          {
+            id: "err-" + Date.now(),
+            conversationId: convId,
+            role: "system",
+            content: `Error: ${err.message}`,
+            createdAt: new Date().toISOString(),
+          },
+        ]);
       }
     } finally {
       abortControllerRef.current = null;
@@ -290,23 +484,27 @@ export default function ChatPage() {
     if ((!input.trim() && !attachments.length) || isStreaming) return;
     const textContent = input.trim();
     const currentAttachments = [...attachments];
+    const isFreshConv = !activeConversation;
 
     const displayContent = textContent;
     setInput("");
     setAttachments([]);
 
-    const convId = activeConversation || await createConversation();
+    const convId = activeConversation || (await createConversation());
 
     let savedAttachments: MessageAttachment[] | undefined;
     if (currentAttachments.length > 0) {
       savedAttachments = [];
       for (const f of currentAttachments) {
         const dataUri = await fileToBase64(f);
-        savedAttachments.push({ name: f.name, type: f.type || "application/octet-stream", data: dataUri });
+        savedAttachments.push({
+          name: f.name,
+          type: f.type || "application/octet-stream",
+          data: dataUri,
+        });
       }
     }
 
-    // Optimistic bubble — render immediately, reconcile with server-assigned id later.
     const optimisticId = "tmp-" + Date.now();
     const optimisticMsg: Message = {
       id: optimisticId,
@@ -320,42 +518,72 @@ export default function ChatPage() {
     setIsStreaming(true);
 
     fetch("/api/messages", {
-      method: "POST", headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ conversationId: convId, role: "user", content: displayContent, attachments: savedAttachments }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        conversationId: convId,
+        role: "user",
+        content: displayContent,
+        attachments: savedAttachments,
+      }),
     })
       .then(r => r.json())
-      .then(saved => setMessages(p => p.map(m => m.id === optimisticId ? saved : m)))
+      .then(saved =>
+        setMessages(p => p.map(m => (m.id === optimisticId ? saved : m)))
+      )
       .catch(() => {});
     fetchConversations();
     streamContentRef.current = "";
     streamReasoningRef.current = "";
-    setStreamContent(""); setStreamReasoning("");
+    setStreamContent("");
+    setStreamReasoning("");
 
-    let apiContent: string | Array<{ type: string; text?: string; image_url?: { url: string } }> = textContent;
+    let apiContent:
+      | string
+      | Array<{ type: string; text?: string; image_url?: { url: string } }> = textContent;
     const imageAttachments = currentAttachments.filter(f => f.type.startsWith("image/"));
     const nonImageAttachments = currentAttachments.filter(f => !f.type.startsWith("image/"));
 
-    // Extract text (and rasterized pages for PDFs) via /api/extract
     let extractedBlock = "";
     const extractedImages: string[] = [];
     if (nonImageAttachments.length) {
-      const results = await Promise.all(nonImageAttachments.map(async f => {
-        try {
-          const fd = new FormData();
-          fd.append("file", f);
-          const r = await fetch("/api/extract", { method: "POST", body: fd });
-          if (!r.ok) {
-            const { error } = await r.json().catch(() => ({ error: "extraction failed" }));
-            return { name: f.name, text: `[Could not extract: ${error}]`, truncated: false, images: [] as string[] };
+      const results = await Promise.all(
+        nonImageAttachments.map(async f => {
+          try {
+            const fd = new FormData();
+            fd.append("file", f);
+            const r = await fetch("/api/extract", { method: "POST", body: fd });
+            if (!r.ok) {
+              const { error } = await r.json().catch(() => ({ error: "extraction failed" }));
+              return {
+                name: f.name,
+                text: `[Could not extract: ${error}]`,
+                truncated: false,
+                images: [] as string[],
+              };
+            }
+            return (await r.json()) as {
+              name: string;
+              text: string;
+              truncated: boolean;
+              images?: string[];
+            };
+          } catch (e: any) {
+            return {
+              name: f.name,
+              text: `[Extraction error: ${e?.message || "unknown"}]`,
+              truncated: false,
+              images: [] as string[],
+            };
           }
-          return await r.json() as { name: string; text: string; truncated: boolean; images?: string[] };
-        } catch (e: any) {
-          return { name: f.name, text: `[Extraction error: ${e?.message || "unknown"}]`, truncated: false, images: [] as string[] };
-        }
-      }));
-      extractedBlock = results.map(r =>
-        `--- File: ${r.name}${r.truncated ? " (truncated)" : ""} ---\n${r.text}\n--- End of ${r.name} ---`
-      ).join("\n\n");
+        })
+      );
+      extractedBlock = results
+        .map(
+          r =>
+            `--- File: ${r.name}${r.truncated ? " (truncated)" : ""} ---\n${r.text}\n--- End of ${r.name} ---`
+        )
+        .join("\n\n");
       for (const r of results) if (r.images?.length) extractedImages.push(...r.images);
     }
 
@@ -385,101 +613,187 @@ export default function ChatPage() {
     if (searchEnabled && textContent) {
       setIsSearching(true);
       try {
+        const attachmentSummary = extractedBlock
+          ? extractedBlock.slice(0, 1500)
+          : currentAttachments.length
+            ? `Files attached: ${currentAttachments.map(f => f.name).join(", ")}`
+            : undefined;
+        const query = await generateSearchQuery(
+          textContent,
+          attachmentSummary,
+          messages.slice(-4).map(m => ({
+            role: m.role,
+            content: typeof m.content === "string" ? m.content : "",
+          }))
+        );
+        const freshness = detectFreshness(textContent);
         const sr = await fetch("/api/search", {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ query: textContent, maxResults: 5 }),
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ query, maxResults: 8, freshness }),
         });
         if (sr.ok) {
-          const { results } = await sr.json();
+          const { results, provider } = (await sr.json()) as {
+            results: SearchHit[];
+            provider: string;
+          };
           if (results?.length) {
-            sources = results.map((r: any) => ({ title: r.title, url: r.url }));
+            sources = results.map(r => ({ title: r.title, url: r.url }));
             setSearchSources(sources);
-            const ctx = results.map((r: any, i: number) => `[${i + 1}] ${r.title}\nURL: ${r.url}\n${r.snippet}`).join("\n\n");
-            chatMsgs.unshift({ role: "system", content: `You have access to the following real-time web search results. Cite sources using [1], [2], etc.\n\n---\nSEARCH RESULTS:\n${ctx}\n---` });
+            chatMsgs.unshift({
+              role: "system",
+              content: buildSearchContext(query, results, provider),
+            });
           }
         }
-      } catch (e) { console.error("Search failed:", e); }
-      finally { setIsSearching(false); }
+      } catch (e) {
+        console.error("Search failed:", e);
+      } finally {
+        setIsSearching(false);
+      }
     }
 
     chatMsgs.push({ role: "user", content: apiContent });
 
+    if (isFreshConv) {
+      // Fire-and-forget title generation alongside the stream
+      generateTitle(
+        convId,
+        textContent || (currentAttachments[0]?.name ?? "Attached file"),
+        currentAttachments.map(f => f.name)
+      );
+    }
+
     await runStream(chatMsgs, convId, sources);
-  }, [input, isStreaming, activeConversation, messages, selectedModelId, attachments, searchEnabled]);
+  }, [
+    input,
+    isStreaming,
+    activeConversation,
+    messages,
+    selectedModelId,
+    attachments,
+    searchEnabled,
+    generateTitle,
+    generateSearchQuery,
+  ]);
 
   const selectedModel = models.find(m => m.id === selectedModelId) || null;
 
-  /* ─── layout ─── */
+  /* ─── layout constants ─── */
   const desktopOpen = sidebarOpen && !isMobile;
+  const sidebarWidth = desktopOpen ? 284 : 0;
 
   return (
-    <div
-      className="nv-chat-shell flex"
-      style={{ background: "var(--bg)", color: "var(--text)" }}
-    >
+    <div className="nv-shell flex" style={{ color: "var(--text)" }}>
       {/* ── Mobile backdrop ── */}
-      {isMobile && sidebarOpen && (
-        <div
-          className="fixed inset-0 z-40"
-          style={{ background: "rgba(0,0,0,0.5)", backdropFilter: "blur(2px)" }}
-          onClick={() => setSidebarOpen(false)}
-        />
+      <AnimatePresence>
+        {isMobile && sidebarOpen && (
+          <motion.div
+            key="mobile-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-40"
+            style={{
+              background: "rgba(5, 5, 10, 0.45)",
+              backdropFilter: "blur(10px) saturate(1.2)",
+              WebkitBackdropFilter: "blur(10px) saturate(1.2)",
+            }}
+            onClick={() => setSidebarOpen(false)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Sidebar wrapper ── */}
+      {isMobile ? (
+        <AnimatePresence>
+          {sidebarOpen && (
+            <motion.aside
+              key="mobile-sidebar"
+              initial={{ x: "-110%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "-110%" }}
+              transition={{ type: "spring", stiffness: 360, damping: 36 }}
+              className="fixed top-0 left-0 bottom-0 z-50"
+              style={{ width: 292, padding: "12px 0 12px 12px" }}
+            >
+              <Sidebar
+                conversations={conversations}
+                activeId={activeConversation}
+                onSelectConv={loadMessages}
+                onNewChat={() => {
+                  setActiveConversation(null);
+                  setMessages([]);
+                  if (isMobile) setSidebarOpen(false);
+                }}
+                onDeleteConv={deleteConversation}
+                onCollapse={() => setSidebarOpen(false)}
+              />
+            </motion.aside>
+          )}
+        </AnimatePresence>
+      ) : (
+        <motion.aside
+          animate={{ width: sidebarWidth }}
+          initial={false}
+          transition={{ type: "spring", stiffness: 280, damping: 34 }}
+          className="h-full min-h-0 flex-shrink-0 overflow-hidden relative z-40"
+          style={{ paddingLeft: desktopOpen ? 12 : 0, paddingTop: 12, paddingBottom: 12 }}
+        >
+          <div style={{ width: 272, height: "100%" }}>
+            <Sidebar
+              conversations={conversations}
+              activeId={activeConversation}
+              onSelectConv={loadMessages}
+              onNewChat={() => {
+                setActiveConversation(null);
+                setMessages([]);
+              }}
+              onDeleteConv={deleteConversation}
+              onCollapse={() => setSidebarOpen(false)}
+            />
+          </div>
+        </motion.aside>
       )}
 
-      {/* ── Sidebar ── */}
-      <aside
-        className="h-full min-h-0 flex-shrink-0 overflow-hidden"
-        style={
-          isMobile
-            ? {
-                position: "fixed",
-                top: 0, bottom: 0, left: 0,
-                width: 280,
-                zIndex: 50,
-                transform: sidebarOpen ? "translateX(0)" : "translateX(-100%)",
-                transition: "transform 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
-              }
-            : {
-                position: "relative",
-                width: desktopOpen ? 260 : 0,
-                transition: "width 0.22s cubic-bezier(0.16, 1, 0.3, 1)",
-              }
-        }
-      >
-        <div style={{ width: isMobile ? 280 : 260, height: "100%" }}>
-          <Sidebar
-            conversations={conversations}
-            activeId={activeConversation}
-            onSelectConv={loadMessages}
-            onNewChat={() => {
-              setActiveConversation(null);
-              setMessages([]);
-              if (isMobile) setSidebarOpen(false);
-            }}
-            onDeleteConv={deleteConversation}
-            onCollapse={() => setSidebarOpen(false)}
-            theme={theme}
-          />
-        </div>
-      </aside>
-
       {/* ── Main ── */}
-      <main className="flex flex-col min-w-0 min-h-0 flex-1 relative" style={{ background: "var(--canvas)" }}>
-        <Topbar
-          model={selectedModel}
-          models={models}
-          onPickModel={m => setSelectedModelId(m.id)}
-          onToggleSidebar={() => setSidebarOpen(v => !v)}
-          sidebarOpen={desktopOpen && !isMobile}
-          theme={theme}
-          onToggleTheme={toggleTheme}
-        />
+      <main className="flex flex-col min-w-0 min-h-0 flex-1 relative">
+        {/* Floating topbar */}
+        <div
+          className="relative z-20 px-3 sm:px-4 pt-3 pb-2"
+          style={{ flexShrink: 0 }}
+        >
+          <div className="mx-auto" style={{ maxWidth: 1200 }}>
+            <Topbar
+              model={selectedModel}
+              models={models}
+              onPickModel={m => setSelectedModelId(m.id)}
+              onToggleSidebar={() => setSidebarOpen(v => !v)}
+              sidebarOpen={desktopOpen}
+              theme={theme}
+              onToggleTheme={toggleTheme}
+            />
+          </div>
+        </div>
 
-        <div ref={scrollRef} className="flex-1 overflow-y-auto min-h-0">
+        {/* Scrollable content */}
+        <div
+          ref={scrollRef}
+          className="flex-1 overflow-y-auto min-h-0 relative z-[1]"
+        >
           {!messages.length && !isStreaming ? (
-            <Empty modelName={selectedModel?.name} />
+            <Empty
+              modelName={selectedModel?.name}
+              onPrompt={text => {
+                setInput(text);
+                // focus composer — will happen naturally
+              }}
+            />
           ) : (
-            <div className="mx-auto px-4 sm:px-7 pt-6 sm:pt-8" style={{ maxWidth: 780, paddingBottom: 220 }}>
+            <div
+              className="mx-auto px-4 sm:px-7 pt-4 sm:pt-6"
+              style={{ maxWidth: 820, paddingBottom: 240 }}
+            >
               {messages.map(msg => (
                 <MessageView
                   key={msg.id}
@@ -495,7 +809,10 @@ export default function ChatPage() {
                   }}
                   onEditChange={setEditInput}
                   onEditSubmit={() => handleEditSubmit(msg.id)}
-                  onEditCancel={() => { setEditingMessageId(null); setEditInput(""); }}
+                  onEditCancel={() => {
+                    setEditingMessageId(null);
+                    setEditInput("");
+                  }}
                   isStreaming={isStreaming}
                 />
               ))}
@@ -512,43 +829,71 @@ export default function ChatPage() {
             </div>
           )}
         </div>
-
-        <Composer
-          value={input}
-          onChange={setInput}
-          onSubmit={sendMessage}
-          onStop={stopGeneration}
-          streaming={isStreaming}
-          attachments={attachments}
-          onAttach={files => setAttachments(prev => [...prev, ...files])}
-          onRemoveAttachment={i => setAttachments(prev => prev.filter((_, idx) => idx !== i))}
-          searchEnabled={searchEnabled}
-          onToggleSearch={() => setSearchEnabled(v => !v)}
-        />
       </main>
 
+      {/* Composer — sibling of sidebar + main so it spans the full viewport
+          width at the bottom (including under the sidebar on desktop).
+          leftOffset realigns the centered pill with the message column. */}
+      <Composer
+        value={input}
+        onChange={setInput}
+        onSubmit={sendMessage}
+        onStop={stopGeneration}
+        streaming={isStreaming}
+        attachments={attachments}
+        onAttach={files => setAttachments(prev => [...prev, ...files])}
+        onRemoveAttachment={i =>
+          setAttachments(prev => prev.filter((_, idx) => idx !== i))
+        }
+        searchEnabled={searchEnabled}
+        onToggleSearch={() => setSearchEnabled(v => !v)}
+        leftOffset={desktopOpen ? sidebarWidth : 0}
+      />
+
       {/* ── Image Lightbox ── */}
-      {lightboxSrc && (
-        <div
-          className="fixed inset-0 z-[100] flex items-center justify-center cursor-zoom-out p-4"
-          style={{ background: "rgba(0,0,0,0.85)", backdropFilter: "blur(6px)" }}
-          onClick={() => setLightboxSrc(null)}
-        >
-          <img
-            src={lightboxSrc}
-            alt="Enlarged"
-            className="max-w-[90vw] max-h-[90vh] object-contain rounded-xl"
-            onClick={e => e.stopPropagation()}
-          />
-          <button
+      <AnimatePresence>
+        {lightboxSrc && (
+          <motion.div
+            key="lightbox"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[120] flex items-center justify-center cursor-zoom-out p-4"
+            style={{
+              background: "rgba(5, 5, 10, 0.88)",
+              backdropFilter: "blur(12px) saturate(1.2)",
+              WebkitBackdropFilter: "blur(12px) saturate(1.2)",
+            }}
             onClick={() => setLightboxSrc(null)}
-            className="absolute top-6 right-6 p-2 rounded-full cursor-pointer"
-            style={{ background: "rgba(255,255,255,0.1)", color: "#fff", border: "none" }}
           >
-            <X size={20} />
-          </button>
-        </div>
-      )}
+            <motion.img
+              src={lightboxSrc}
+              alt="Enlarged"
+              initial={{ scale: 0.95, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.95, opacity: 0 }}
+              transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              className="max-w-[90vw] max-h-[90vh] object-contain rounded-[18px]"
+              onClick={e => e.stopPropagation()}
+              style={{ boxShadow: "0 40px 100px -20px rgba(0,0,0,0.6)" }}
+            />
+            <button
+              type="button"
+              onClick={() => setLightboxSrc(null)}
+              className="absolute top-6 right-6 w-10 h-10 grid place-items-center rounded-full cursor-pointer nv-press"
+              style={{
+                background: "rgba(255,255,255,0.1)",
+                color: "#fff",
+                border: "1px solid rgba(255,255,255,0.12)",
+                backdropFilter: "blur(12px)",
+              }}
+              aria-label="Close"
+            >
+              <X size={18} />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }

@@ -10,6 +10,10 @@ services:
       - PORT=8090
       - HOSTNAME=0.0.0.0
       - NODE_ENV=production
+      # Web search provider — pick up host value if set, else fall back to
+      # the baked-in Dockerfile default.
+      - TAVILY_API_KEY=${TAVILY_API_KEY:-}
+      - BRAVE_SEARCH_API_KEY=${BRAVE_SEARCH_API_KEY:-}
     volumes:
       - ./data:/app/data
     restart: unless-stopped
